@@ -1,0 +1,6 @@
+{
+  "name": "Esclerometría Pro Colombia",
+  "description": "Aplicación de campo para control y evaluación de ensayos de esclerometría en concreto bajo normativa colombiana NTC 3692 y NSR-10 con curvas de calibración, registro fotográfico y exportación a Excel.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
