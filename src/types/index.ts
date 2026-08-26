@@ -20,13 +20,14 @@ export type SurfaceCondition =
   | 'Encofrado de madera';
 
 export type CurveModel = 
+  | 'SCHMIDT_N_DIRECT'
   | 'PROCEQ_N_STANDARD' 
   | 'PROCEQ_N_CUBE'
   | 'NSR10_COLOMBIA' 
   | 'ASTM_POLYNOMIAL'
   | 'CUSTOM_CALIBRATED';
 
-export type TestStatus = 'CUMPLE' | 'DUDOSO' | 'NO_CUMPLE' | 'INVALIDO';
+export type TestStatus = 'CUMPLE' | 'DUDOSO' | 'NO_CUMPLE' | 'INVALIDO' | 'DIAGNOSTICO';
 
 export interface TestPhoto {
   id: string;
@@ -94,4 +95,15 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   testsCount?: number;
+  userId?: string;
 }
+
+export interface UserProfile {
+  id: string;
+  email?: string;
+  fullName?: string;
+  avatarUrl?: string;
+  provider?: string;
+}
+
+export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline';

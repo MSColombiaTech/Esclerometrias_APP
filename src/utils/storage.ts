@@ -41,7 +41,7 @@ export function getStoredTests(): SclerometryTest[] {
         t.readings,
         t.impactAngle,
         t.fcDesignMpa,
-        t.curveModel || 'PROCEQ_N_STANDARD',
+        t.curveModel || 'SCHMIDT_N_DIRECT',
         carbonationFactor,
         t.customCurveParams
       );

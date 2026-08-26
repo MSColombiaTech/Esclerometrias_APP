@@ -99,27 +99,27 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/85 backdrop-blur-sm overflow-y-auto animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 dark:bg-slate-950/85 backdrop-blur-sm overflow-y-auto animate-in fade-in">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-2xl text-slate-800 dark:text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col transition-colors">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 border-b border-slate-700 flex items-center justify-between shrink-0">
+        <div className="bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30">
               <Building2 className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                 {initialData ? 'Editar Proyecto de Esclerometría' : 'Crear Nuevo Proyecto / Obra'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Información técnica y datos legales para informes bajo NSR-10
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -130,7 +130,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Nombre de la Obra / Estructura *
               </label>
               <input
@@ -139,12 +139,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="ej: Torres de San Jerónimo - Etapa 2"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Código de Proyecto
               </label>
               <input
@@ -152,14 +152,14 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="OBRA-2026-01"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Cliente / Propietario
               </label>
               <input
@@ -167,12 +167,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
                 placeholder="ej: Constructora Bolívar S.A."
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Municipio / Ciudad
               </label>
               <input
@@ -180,12 +180,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={municipality}
                 onChange={(e) => setMunicipality(e.target.value)}
                 placeholder="ej: Medellín / Bogotá"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Departamento
               </label>
               <input
@@ -193,13 +193,13 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 placeholder="ej: Antioquia / Cundinamarca"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
+            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
               Dirección / Ubicación en Obra
             </label>
             <input
@@ -207,13 +207,13 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="ej: Carrera 43A # 1-50, El Poblado"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Contratista Constructor
               </label>
               <input
@@ -221,12 +221,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={contractor}
                 onChange={(e) => setContractor(e.target.value)}
                 placeholder="ej: Consorcio Edificaciones SAS"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Interventoría / Supervisión Técnica
               </label>
               <input
@@ -234,14 +234,14 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={supervision}
                 onChange={(e) => setSupervision(e.target.value)}
                 placeholder="ej: Interventorías Colombianas SAS"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Ingeniero Especialista Responsable
               </label>
               <input
@@ -249,12 +249,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={engineerInCharge}
                 onChange={(e) => setEngineerInCharge(e.target.value)}
                 placeholder="ej: Ing. Carlos Andrés Restrepo"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                 Matrícula Profesional (COPNIA)
               </label>
               <input
@@ -262,41 +262,41 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                 value={licenseNumber}
                 onChange={(e) => setLicenseNumber(e.target.value)}
                 placeholder="ej: TP 25202-18456 CND"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-sky-500 focus:outline-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white font-mono focus:border-sky-500 focus:outline-none"
               />
             </div>
           </div>
 
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
-            <h4 className="font-bold text-sky-400">Equipo Esclerómetro & Curva Predeterminada</h4>
+          <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <h4 className="font-bold text-sky-600 dark:text-sky-400">Equipo Esclerómetro & Curva Predeterminada</h4>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Modelo de Martillo</label>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Modelo de Martillo</label>
                 <input
                   type="text"
                   value={defaultHammerModel}
                   onChange={(e) => setDefaultHammerModel(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white font-mono text-xs focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Serial / Calibración</label>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Serial / Calibración</label>
                 <input
                   type="text"
                   value={defaultHammerSerial}
                   onChange={(e) => setDefaultHammerSerial(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white font-mono text-xs focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Curva por Defecto</label>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Curva por Defecto</label>
                 <select
                   value={defaultCurve}
                   onChange={(e) => setDefaultCurve(e.target.value as CurveModel)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white text-xs focus:outline-none"
                 >
                   <option value="PROCEQ_N_STANDARD">Proceq Tipo N (Cilindro Ø15x30)</option>
                   <option value="PROCEQ_N_CUBE">Proceq Tipo N (Cubo 150mm)</option>
@@ -308,7 +308,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
+            <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
               Notas Generales de la Obra
             </label>
             <textarea
@@ -316,16 +316,16 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Objetivos del estudio, especificaciones de la mezcla de concreto..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:border-sky-500 focus:outline-none"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:border-sky-500 focus:outline-none"
             />
           </div>
 
           {/* Footer actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition"
             >
               Cancelar
             </button>

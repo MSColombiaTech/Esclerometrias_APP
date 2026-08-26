@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Project, SclerometryTest } from '../types';
 import { CURVE_MODEL_DESCRIPTIONS } from '../utils/sclerometryNorms';
-import { X, FileText, Download, Copy, Check, Printer } from 'lucide-react';
+import { generateSclerometryPDF } from '../utils/pdfGenerator';
+import { X, FileText, Download, Copy, Check, Printer, FileDown, CheckCircle2 } from 'lucide-react';
 
 interface ExportReportModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   tests
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [reportFormat, setReportFormat] = useState<'text' | 'csv'>('text');
 
   if (!isOpen) return null;
@@ -25,8 +27,10 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   const passedCount = tests.filter(t => t.status === 'CUMPLE').length;
   const doubtfulCount = tests.filter(t => t.status === 'DUDOSO').length;
   const failedCount = tests.filter(t => t.status === 'NO_CUMPLE').length;
+  const diagnosticCount = tests.filter(t => t.status === 'DIAGNOSTICO').length;
   const invalidCount = tests.filter(t => t.status === 'INVALIDO').length;
-  const compliancePct = testsCount > 0 ? Math.round((passedCount / testsCount) * 100) : 0;
+  const testsWithDesign = tests.filter(t => t.fcDesignMpa > 0);
+  const compliancePct = testsWithDesign.length > 0 ? Math.round((passedCount / testsWithDesign.length) * 100) : (diagnosticCount > 0 ? 100 : 0);
 
   const generateTextReport = (): string => {
     const dateStr = new Date().toLocaleDateString('es-CO', {
@@ -63,16 +67,25 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     sb += '3. RESUMEN ESTADÍSTICO DE RESULTADOS\n';
     sb += '--------------------------------------------------------------------------------\n';
     sb += `Total Elementos Ensayados: ${testsCount}\n`;
-    sb += `• Conformes (CUMPLE >= 95%): ${passedCount} (${compliancePct}%)\n`;
-    sb += `• En Zona Dudosa (80-95%):   ${doubtfulCount}\n`;
-    sb += `• No Conformes (< 80%):       ${failedCount}\n`;
+    if (testsWithDesign.length > 0) {
+      sb += `• Conformes (CUMPLE >= 95%): ${passedCount} (${compliancePct}% de elementos con f'c)\n`;
+      sb += `• En Zona Dudosa (80-95%):   ${doubtfulCount}\n`;
+      sb += `• No Conformes (< 80%):       ${failedCount}\n`;
+    }
+    if (diagnosticCount > 0) {
+      sb += `• Diagnóstico / In-Situ:     ${diagnosticCount} (Sin f'c de diseño especificado)\n`;
+    }
     sb += `• Ensayos Anulados/Inválidos: ${invalidCount}\n\n`;
     sb += '4. TABLA DETALLADA DE ELEMENTOS ENSAYADOS\n';
     sb += '--------------------------------------------------------------------------------\n';
 
     tests.forEach((t, i) => {
       sb += `[${i + 1}] Elemento: ${t.elementTag} (${t.elementType}) - ${t.levelAxis}\n`;
-      sb += `    f'c Diseño:       ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
+      if (t.fcDesignMpa > 0) {
+        sb += `    f'c Diseño:       ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
+      } else {
+        sb += `    f'c Diseño:       Sin especificar (Evaluación Diagnóstica) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
+      }
       sb += `    Lecturas (10):    ${t.readings.join(', ')}\n`;
       if (t.excludedIndices.length > 0) {
         sb += `    Descartes NTC:    ${t.excludedIndices.map(idx => `Impacto #${idx + 1} (${t.readings[idx]})`).join(', ')} (> 6 del promedio)\n`;
@@ -81,7 +94,11 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
       }
       sb += `    Estadística R:    R_crudo = ${t.meanRaw} | ΔR = ${t.correctionAngle} | R_corr = ${t.meanCorrected} | CV = ${t.cov}%\n`;
       sb += `    f'c Estimado:     ${t.estimatedFcMpa} MPa (${t.estimatedFcPsi} PSI / ${t.estimatedFcKgcm2} kg/cm²)\n`;
-      sb += `    Conformidad:      ${t.status} (${t.complianceRatio}% del f'c de diseño)\n`;
+      if (t.fcDesignMpa > 0) {
+        sb += `    Conformidad:      ${t.status} (${t.complianceRatio}% del f'c de diseño)\n`;
+      } else {
+        sb += `    Conformidad:      ${t.status} (In-Situ Puro)\n`;
+      }
       sb += `    Dictamen:         ${t.statusNotes}\n\n`;
     });
 
@@ -110,6 +127,17 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
       csv += `${i + 1},"${t.elementTag}","${t.elementType}","${t.levelAxis}",${t.fcDesignMpa},${t.fcDesignPsi},${t.concreteAgeDays},${t.impactAngle},${t.meanRaw},${t.correctionAngle},${t.meanCorrected},${t.stdDev},${t.cov},${t.estimatedFcMpa},${t.estimatedFcPsi},${t.estimatedFcKgcm2},${t.complianceRatio},"${t.status}",${t.excludedIndices.length},"${t.operatorName}"\n`;
     });
     return csv;
+  };
+
+  const handleExportPDF = () => {
+    try {
+      setIsGeneratingPdf(true);
+      generateSclerometryPDF(project, tests);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handleCopy = () => {
@@ -157,42 +185,42 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 dark:bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-4xl text-slate-800 dark:text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col transition-colors">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 border-b border-slate-700 flex items-center justify-between shrink-0">
+        <div className="bg-gradient-to-r from-emerald-50 via-white to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
               <FileText className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                 Informe Técnico Oficial NSR-10 / NTC 3692
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Certificado de evaluación no destructiva y exportación de datos de obra
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Toolbar */}
-        <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
+        <div className="bg-slate-50 dark:bg-slate-950 px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-semibold">Formato:</span>
+            <span className="text-slate-600 dark:text-slate-400 font-semibold">Formato:</span>
             <button
               onClick={() => setReportFormat('text')}
               className={`px-3 py-1 rounded-lg font-bold transition ${
                 reportFormat === 'text'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
               }`}
             >
               Informe Técnico (TXT / Imprimir)
@@ -201,57 +229,75 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
               onClick={() => setReportFormat('csv')}
               className={`px-3 py-1 rounded-lg font-bold transition ${
                 reportFormat === 'csv'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
               }`}
             >
               Tabla Excel (CSV)
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleExportPDF}
+              disabled={isGeneratingPdf}
+              className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer"
+              title="Descargar Informe Oficial en Formato PDF con membrete y firmas"
+            >
+              <FileDown className="h-4 w-4" />
+              <span>{isGeneratingPdf ? 'Generando PDF...' : 'Generar Informe PDF'}</span>
+            </button>
             <button
               onClick={handlePrint}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition shadow-sm"
             >
               <Printer className="h-3.5 w-3.5" />
               <span>Imprimir</span>
             </button>
             <button
               onClick={handleCopy}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition shadow-sm"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
               <span>{copied ? 'Copiado' : 'Copiar'}</span>
             </button>
             <button
               onClick={handleDownload}
-              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition"
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Descargar Archivo</span>
+              <span>Descargar {reportFormat.toUpperCase()}</span>
             </button>
           </div>
         </div>
 
         {/* Content Viewer */}
-        <div className="p-4 overflow-y-auto grow bg-slate-950">
-          <pre className="p-4 bg-slate-900 border border-slate-800 rounded-xl text-slate-300 font-mono text-[11px] sm:text-xs whitespace-pre-wrap select-all leading-relaxed">
+        <div className="p-4 overflow-y-auto grow bg-slate-100 dark:bg-slate-950">
+          <pre className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-300 font-mono text-[11px] sm:text-xs whitespace-pre-wrap select-all leading-relaxed shadow-sm">
             {reportFormat === 'text' ? generateTextReport() : generateCSV()}
           </pre>
         </div>
 
         {/* Footer */}
-        <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs shrink-0">
-          <span className="text-slate-400">
+        <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shrink-0">
+          <span className="text-slate-500 dark:text-slate-400">
             {testsCount} elementos incluidos • {compliancePct}% índice de conformidad
           </span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
-          >
-            Cerrar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPDF}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-sm transition"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              <span>Descargar PDF</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
 
       </div>
