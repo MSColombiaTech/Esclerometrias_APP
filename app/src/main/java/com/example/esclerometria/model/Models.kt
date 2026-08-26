@@ -48,14 +48,15 @@ enum class SurfaceCondition(val label: String) {
 }
 
 enum class CurveModel(val label: String, val formula: String) {
-    PROCEQ_N_STANDARD("Curva Universal NTC 3692 / Tipo N", "f'c = 0.0436 · R^2.052"),
-    NSR10_COLOMBIA("Curva NSR-10 Agregados Colombianos", "f'c = 0.0385 · R^2.085"),
-    ASTM_POLYNOMIAL("Modelo Polinomial ASTM C805", "f'c = 0.0212·R² + 0.325·R - 5.1"),
-    CUSTOM_CALIBRATED("Curva Calibrada in-situ", "f'c = a · R^b");
+    PROCEQ_N_STANDARD("Universal NTC 3692 / Tipo N", "f'c = 0.0245·R² + 0.155·R - 3.2"),
+    NSR10_COLOMBIA("Curva NSR-10 Agregados Colombianos", "f'c = 0.0225·R² + 0.180·R - 3.5"),
+    ASTM_POLYNOMIAL("Polinomial ASTM C805 / ACI 228", "f'c = 0.0212·R² + 0.325·R - 5.1"),
+    CUSTOM_CALIBRATED("Regresión por Núcleos In-Situ (ISO 1920-7)", "f'c = a · R^b + c"),
+    SONREB_COMBINED("Método Combinado SonReb (NTC 3692 + NTC 4325)", "f'c = a · R^b · V^c");
 
     companion object {
         fun fromString(value: String): CurveModel {
-            return entries.find { it.name.equals(value, ignoreCase = true) } ?: PROCEQ_N_STANDARD
+            return entries.find { it.name.equals(value, ignoreCase = true) || it.label.equals(value, ignoreCase = true) } ?: PROCEQ_N_STANDARD
         }
     }
 }
@@ -86,6 +87,14 @@ data class ConcretePreset(
     val label: String
 )
 
+data class CalibrationPoint(
+    val id: String,
+    val rebound: Double,
+    val fcMpa: Double,
+    val source: String = "Núcleo Diamantado (NTC 3658)",
+    val elementTag: String = ""
+)
+
 data class EvaluationResult(
     val validReadings: List<Int>,
     val excludedIndices: List<Int>,
@@ -98,8 +107,10 @@ data class EvaluationResult(
     val estimatedFcKgcm2: Double,
     val estimatedFcPsi: Int,
     val complianceRatio: Double,
+    val uncertaintyMpa: Double,
     val status: TestStatus,
-    val statusNotes: String
+    val statusNotes: String,
+    val formulaUsed: String = ""
 )
 
 data class Project(
@@ -137,6 +148,14 @@ data class SclerometryTest(
     val surfaceCondition: SurfaceCondition,
     val carbonationDepthMm: Double,
     val curveModel: CurveModel,
+    val customA: Double = 0.0245,
+    val customB: Double = 2.052,
+    val customC: Double = 0.0,
+    val ultrasonicPulseVelocity: Double = 0.0,
+    val moistureFactor: Double = 1.0,
+    val formworkFactor: Double = 1.0,
+    val uncertaintyMpa: Double = 0.0,
+    val coreCalibrationData: String = "",
     val readings: List<Int>,
     val excludedIndices: List<Int>,
     val meanRaw: Double,

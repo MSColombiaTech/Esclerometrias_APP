@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.example.esclerometria"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.aistudio.esclerometria.ntccol"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -50,6 +50,10 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 

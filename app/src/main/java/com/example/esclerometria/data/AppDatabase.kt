@@ -123,7 +123,7 @@ suspend fun populateInitialData(projectDao: ProjectDao, testDao: TestDao) {
             angle = angle,
             fcDesignMpa = fcDesignMpa,
             model = CurveModel.PROCEQ_N_STANDARD,
-            carbonationFactor = 1.0
+            carbonationDepthMm = 1.5
         )
         return SclerometryTestEntity(
             id = id,

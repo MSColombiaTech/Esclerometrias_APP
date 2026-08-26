@@ -76,4 +76,70 @@ class SclerometryNormsTest {
         assertEquals(TestStatus.INVALIDO, result.status)
         assertTrue("Should contain invalid status explanation", result.statusNotes.contains("ANULADO") || result.statusNotes.contains("descartaron"))
     }
+
+    @Test
+    fun testCustomPowerCurveEvaluation() {
+        val readings = listOf(35, 35, 36, 35, 36, 35, 35, 36, 35, 35)
+        val result = SclerometryNorms.evaluateSclerometryTest(
+            readings = readings,
+            angle = ImpactAngle.HORIZONTAL,
+            fcDesignMpa = 28.0,
+            model = CurveModel.CUSTOM_CALIBRATED,
+            customA = 0.0245,
+            customB = 2.052
+        )
+
+        assertTrue("Custom curve f'c should be calculated accurately", result.estimatedFcMpa > 20.0)
+        assertTrue("Uncertainty U should be calculated", result.uncertaintyMpa > 0.0)
+        assertTrue("Formula used should reflect custom curve", result.formulaUsed.contains("0.0245"))
+    }
+
+    @Test
+    fun testSonRebCombinedMethod() {
+        val readings = listOf(38, 38, 39, 38, 37, 38, 38, 39, 38, 38)
+        val result = SclerometryNorms.evaluateSclerometryTest(
+            readings = readings,
+            angle = ImpactAngle.HORIZONTAL,
+            fcDesignMpa = 30.0,
+            model = CurveModel.SONREB_COMBINED,
+            upvKmS = 4.20
+        )
+
+        assertTrue("SonReb f'c should be in realistic structural range", result.estimatedFcMpa in 25.0..45.0)
+        assertTrue("Formula used should include UPV", result.formulaUsed.contains("4.2"))
+    }
+
+    @Test
+    fun testCarbonationAndMoistureCorrection() {
+        val readings = listOf(35, 35, 36, 35, 36, 35, 35, 36, 35, 35)
+        val resultUncorrected = SclerometryNorms.evaluateSclerometryTest(
+            readings = readings,
+            angle = ImpactAngle.HORIZONTAL,
+            fcDesignMpa = 28.0,
+            carbonationDepthMm = 0.0,
+            moistureFactor = 1.0
+        )
+
+        val resultCarbonated = SclerometryNorms.evaluateSclerometryTest(
+            readings = readings,
+            angle = ImpactAngle.HORIZONTAL,
+            fcDesignMpa = 28.0,
+            carbonationDepthMm = 4.0, // 4mm carbonation reduces overestimated surface hardness
+            moistureFactor = 1.0
+        )
+
+        assertTrue(
+            "Carbonated concrete should have a reduced estimated f'c to avoid overestimation",
+            resultCarbonated.estimatedFcMpa < resultUncorrected.estimatedFcMpa
+        )
+    }
+
+    @Test
+    fun testFitPowerRegressionFromCoreData() {
+        val coreData = "30:22.0; 35:30.0; 40:39.0"
+        val fit = SclerometryNorms.fitPowerRegressionFromCoreData(coreData)
+        assertTrue("Coefficient a should be positive", fit.first > 0.0)
+        assertTrue("Exponent b should be around 1.5 - 2.5", fit.second in 1.0..3.0)
+        assertTrue("R^2 should be close to 1.0", fit.third > 0.90)
+    }
 }

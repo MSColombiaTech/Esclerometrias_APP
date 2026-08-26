@@ -1,6 +1,7 @@
 package com.example.esclerometria.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -30,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.example.esclerometria.model.*
 import com.example.esclerometria.ui.theme.*
 import com.example.esclerometria.utils.SclerometryNorms
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -697,11 +701,37 @@ fun TestCard(
 }
 
 // ----------------------------------------------------
-// TAB 1: CALIBRATION CURVES CANVAS
+// TAB 1: CALIBRATION CURVES CANVAS (PER-ELEMENT & NTC 3692 / NSR-10 / ISO 1920-7)
 // ----------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
+    var selectedElementId by remember { mutableStateOf<String?>("ALL") }
     var selectedTestOnChart by remember { mutableStateOf<SclerometryTest?>(null) }
+    
+    // Toggle options for data visibility ("Agregar o Quitar Datos")
+    var showProceqCurve by remember { mutableStateOf(true) }
+    var showNsr10Curve by remember { mutableStateOf(true) }
+    var showAstmCurve by remember { mutableStateOf(false) }
+    var showElementCurve by remember { mutableStateOf(true) }
+    var showUncertaintyBand by remember { mutableStateOf(true) }
+    var showTestPoints by remember { mutableStateOf(true) }
+    var showCorePoints by remember { mutableStateOf(true) }
+    var pointStatusFilter by remember { mutableStateOf("ALL") }
+
+    // User-added empirical calibration core points
+    val customCorePoints = remember {
+        mutableStateListOf(
+            CalibrationPoint("cp-1", 32.0, 24.5, "Núcleo N-1 (Columna C-101)", "C-101"),
+            CalibrationPoint("cp-2", 36.5, 31.8, "Núcleo N-2 (Viga V-202)", "V-202"),
+            CalibrationPoint("cp-3", 40.0, 39.2, "Núcleo N-3 (Muro M-1)", "M-1")
+        )
+    }
+    var showAddPointDialog by remember { mutableStateOf(false) }
+
+    val activeSelectedTest = if (selectedElementId != "ALL") {
+        tests.find { it.id == selectedElementId }
+    } else null
 
     LazyColumn(
         modifier = Modifier
@@ -709,6 +739,84 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // 1. Element Selector Banner (Curvas por Elemento Analizado)
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Slate900),
+                border = BorderStroke(1.dp, BrandSky.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Tune, contentDescription = null, tint = AmberGold, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Curvas por Elemento Analizado (NSR-10 / NTC 3692)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Visualiza la correlación específica calibrada para cada elemento estructural.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Slate400
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Element Selection Chips
+                    Text("Seleccionar Elemento a Analizar:", style = MaterialTheme.typography.labelSmall, color = Slate300, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item {
+                            FilterChip(
+                                selected = selectedElementId == "ALL",
+                                onClick = {
+                                    selectedElementId = "ALL"
+                                    selectedTestOnChart = null
+                                },
+                                label = { Text("🌐 Todos los Elementos (${tests.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSky,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Slate800,
+                                    labelColor = Slate300
+                                )
+                            )
+                        }
+                        items(tests) { test ->
+                            val isSelected = selectedElementId == test.id
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedElementId = test.id
+                                    selectedTestOnChart = test
+                                },
+                                label = { Text("${test.elementTag} (${test.elementType.label})", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmberGold,
+                                    selectedLabelColor = Slate950,
+                                    containerColor = Slate800,
+                                    labelColor = Slate300
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Interactive Controls: "Agregar o Quitar Datos del Gráfico"
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -716,35 +824,201 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "Curvas de Conversión Rebote Schmidt vs Resistencia f'c",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Ploteo 2D de curvas teóricas NTC 3692 y puntos de ensayos reales de la obra.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate400
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.FilterList, contentDescription = null, tint = BrandSkyLight, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Opciones: Agregar o Quitar Datos", fontWeight = FontWeight.Bold, color = Slate100, fontSize = 14.sp)
+                        }
+
+                        Button(
+                            onClick = { showAddPointDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Slate950)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Agregar Núcleo", color = Slate950, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Toggle Chips Row
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item {
+                            FilterChip(
+                                selected = showProceqCurve,
+                                onClick = { showProceqCurve = !showProceqCurve },
+                                label = { Text("NTC 3692 Tipo N", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyLight.copy(alpha = 0.25f),
+                                    selectedLabelColor = BrandSkyLight,
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = showNsr10Curve,
+                                onClick = { showNsr10Curve = !showNsr10Curve },
+                                label = { Text("NSR-10 Agregados Col.", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmberGold.copy(alpha = 0.25f),
+                                    selectedLabelColor = AmberGold,
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = showAstmCurve,
+                                onClick = { showAstmCurve = !showAstmCurve },
+                                label = { Text("ASTM C805 / ACI 228", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFFC084FC).copy(alpha = 0.25f),
+                                    selectedLabelColor = Color(0xFFC084FC),
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                        if (activeSelectedTest != null) {
+                            item {
+                                FilterChip(
+                                    selected = showElementCurve,
+                                    onClick = { showElementCurve = !showElementCurve },
+                                    label = { Text("Curva del Elemento (${activeSelectedTest.elementTag})", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = EmeraldSuccess.copy(alpha = 0.25f),
+                                        selectedLabelColor = EmeraldSuccess,
+                                        containerColor = Slate800,
+                                        labelColor = Slate400
+                                    )
+                                )
+                            }
+                        }
+                        item {
+                            FilterChip(
+                                selected = showUncertaintyBand,
+                                onClick = { showUncertaintyBand = !showUncertaintyBand },
+                                label = { Text("Banda Incertidumbre (±U ISO 17025)", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF38BDF8).copy(alpha = 0.25f),
+                                    selectedLabelColor = Color(0xFF38BDF8),
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = showTestPoints,
+                                onClick = { showTestPoints = !showTestPoints },
+                                label = { Text("Puntos Ensayos", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Slate700,
+                                    selectedLabelColor = Slate100,
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = showCorePoints,
+                                onClick = { showCorePoints = !showCorePoints },
+                                label = { Text("Núcleos Diamantados (${customCorePoints.size})", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmberGold.copy(alpha = 0.25f),
+                                    selectedLabelColor = AmberGold,
+                                    containerColor = Slate800,
+                                    labelColor = Slate400
+                                )
+                            )
+                        }
+                    }
+
+                    // Filter points by status
+                    if (showTestPoints) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Filtrar Puntos:", style = MaterialTheme.typography.labelSmall, color = Slate400, fontSize = 10.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                item {
+                                    FilterChip(
+                                        selected = pointStatusFilter == "ALL",
+                                        onClick = { pointStatusFilter = "ALL" },
+                                        label = { Text("Todos", fontSize = 9.sp) }
+                                    )
+                                }
+                                items(TestStatus.entries) { st ->
+                                    FilterChip(
+                                        selected = pointStatusFilter == st.name,
+                                        onClick = { pointStatusFilter = st.name },
+                                        label = { Text(st.label, fontSize = 9.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Main 2D Interactive Canvas Chart
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Slate900),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = if (activeSelectedTest != null) "Curva de Calibración: ${activeSelectedTest.elementTag} (${activeSelectedTest.elementType.label})" else "Curvas de Calibración & Resistencia (NTC 3692 / NSR-10)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = if (activeSelectedTest != null) "Modelo: ${activeSelectedTest.curveModel.label} | f'c Diseño: ${activeSelectedTest.fcDesignMpa} MPa" else "Gráfico interactivo bidimensional con soporte multi-curva y puntos in-situ.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate400
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Canvas Chart
+                    // Canvas Chart Box
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .height(310.dp)
                             .background(Slate950, RoundedCornerShape(12.dp))
                             .border(1.dp, Slate800, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .padding(10.dp)
                     ) {
                         Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .pointerInput(tests) {
+                                .pointerInput(tests, customCorePoints.toList(), activeSelectedTest) {
                                     detectTapGestures { offset ->
-                                        val chartW = size.width - 40f
+                                        val chartW = size.width - 45f
                                         val chartH = size.height - 30f
                                         val minR = 15f
                                         val maxR = 55f
@@ -756,13 +1030,16 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
                                             val rVal = t.meanCorrected.toFloat().coerceIn(minR, maxR)
                                             val fcVal = t.estimatedFcMpa.toFloat().coerceIn(minFc, maxFc)
 
-                                            val px = 30f + ((rVal - minR) / (maxR - minR)) * chartW
+                                            val px = 35f + ((rVal - minR) / (maxR - minR)) * chartW
                                             val py = (size.height - 20f) - ((fcVal - minFc) / (maxFc - minFc)) * chartH
 
                                             val distSq = (offset.x - px) * (offset.x - px) + (offset.y - py) * (offset.y - py)
-                                            distSq < 900f // 30px radius
+                                            distSq < 1000f
                                         }
-                                        selectedTestOnChart = tapped
+                                        if (tapped != null) {
+                                            selectedTestOnChart = tapped
+                                            selectedElementId = tapped.id
+                                        }
                                     }
                                 }
                         ) {
@@ -795,66 +1072,167 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
                             drawLine(Slate600, Offset(originX, originY), Offset(w - 10f, originY), strokeWidth = 2f)
                             drawLine(Slate600, Offset(originX, originY), Offset(originX, 15f), strokeWidth = 2f)
 
-                            // 1. Draw Proceq NTC 3692 Curve (Sky Blue)
-                            val pathProceq = Path()
-                            var first = true
-                            for (r in 18..55) {
-                                val fc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.PROCEQ_N_STANDARD)
-                                val x = toX(r.toDouble())
-                                val y = toY(fc)
-                                if (first) {
-                                    pathProceq.moveTo(x, y)
-                                    first = false
-                                } else {
-                                    pathProceq.lineTo(x, y)
+                            // 1. Proceq NTC 3692 Curve
+                            if (showProceqCurve) {
+                                val pathProceq = Path()
+                                var first = true
+                                for (r in 18..55) {
+                                    val fc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.PROCEQ_N_STANDARD)
+                                    val x = toX(r.toDouble())
+                                    val y = toY(fc)
+                                    if (first) { pathProceq.moveTo(x, y); first = false } else { pathProceq.lineTo(x, y) }
                                 }
+                                drawPath(pathProceq, BrandSkyLight, style = Stroke(width = 3f))
                             }
-                            drawPath(pathProceq, BrandSkyLight, style = Stroke(width = 3f))
 
-                            // 2. Draw NSR-10 Colombian Aggregates Curve (Amber Gold)
-                            val pathNSR10 = Path()
-                            first = true
-                            for (r in 18..55) {
-                                val fc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.NSR10_COLOMBIA)
-                                val x = toX(r.toDouble())
-                                val y = toY(fc)
-                                if (first) {
-                                    pathNSR10.moveTo(x, y)
-                                    first = false
-                                } else {
-                                    pathNSR10.lineTo(x, y)
+                            // 2. NSR-10 Colombian Aggregates Curve
+                            if (showNsr10Curve) {
+                                val pathNSR10 = Path()
+                                var first = true
+                                for (r in 18..55) {
+                                    val fc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.NSR10_COLOMBIA)
+                                    val x = toX(r.toDouble())
+                                    val y = toY(fc)
+                                    if (first) { pathNSR10.moveTo(x, y); first = false } else { pathNSR10.lineTo(x, y) }
                                 }
+                                drawPath(
+                                    pathNSR10,
+                                    AmberGold,
+                                    style = Stroke(width = 2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 5f)))
+                                )
                             }
-                            drawPath(
-                                pathNSR10,
-                                AmberGold,
-                                style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
-                            )
 
-                            // 3. Draw Test Points
-                            tests.forEach { test ->
-                                if (test.status != TestStatus.INVALIDO && test.meanCorrected > 0) {
-                                    val px = toX(test.meanCorrected.coerceIn(minR, maxR))
-                                    val py = toY(test.estimatedFcMpa.coerceIn(minFc, maxFc))
+                            // 3. ASTM C805 Polynomial
+                            if (showAstmCurve) {
+                                val pathAstm = Path()
+                                var first = true
+                                for (r in 18..55) {
+                                    val fc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.ASTM_POLYNOMIAL)
+                                    val x = toX(r.toDouble())
+                                    val y = toY(fc)
+                                    if (first) { pathAstm.moveTo(x, y); first = false } else { pathAstm.lineTo(x, y) }
+                                }
+                                drawPath(
+                                    pathAstm,
+                                    Color(0xFFC084FC),
+                                    style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+                                )
+                            }
 
-                                    val pointColor = when (test.status) {
-                                        TestStatus.CUMPLE -> EmeraldSuccess
-                                        TestStatus.DUDOSO -> AmberGold
-                                        TestStatus.NO_CUMPLE -> RoseAlert
-                                        TestStatus.INVALIDO -> Color(0xFF8B5CF6)
+                            // 4. Dedicated Per-Element Calibrated Curve (if single element selected)
+                            if (activeSelectedTest != null && showElementCurve) {
+                                val pathElement = Path()
+                                var first = true
+                                for (r in 18..55) {
+                                    val fc = SclerometryNorms.calculateFcFromRebound(
+                                        rCorr = r.toDouble(),
+                                        model = activeSelectedTest.curveModel,
+                                        customA = activeSelectedTest.customA,
+                                        customB = activeSelectedTest.customB,
+                                        customC = activeSelectedTest.customC,
+                                        upvKmS = activeSelectedTest.ultrasonicPulseVelocity
+                                    )
+                                    val x = toX(r.toDouble())
+                                    val y = toY(fc)
+                                    if (first) { pathElement.moveTo(x, y); first = false } else { pathElement.lineTo(x, y) }
+                                }
+                                drawPath(pathElement, EmeraldSuccess, style = Stroke(width = 4f))
+
+                                // Uncertainty Band (+/- U)
+                                if (showUncertaintyBand) {
+                                    val uVal = if (activeSelectedTest.uncertaintyMpa > 0) activeSelectedTest.uncertaintyMpa else 3.5
+                                    val pathUpper = Path()
+                                    val pathLower = Path()
+                                    var f1 = true
+                                    for (r in 18..55) {
+                                        val fc = SclerometryNorms.calculateFcFromRebound(
+                                            rCorr = r.toDouble(),
+                                            model = activeSelectedTest.curveModel,
+                                            customA = activeSelectedTest.customA,
+                                            customB = activeSelectedTest.customB,
+                                            customC = activeSelectedTest.customC,
+                                            upvKmS = activeSelectedTest.ultrasonicPulseVelocity
+                                        )
+                                        val x = toX(r.toDouble())
+                                        val yUp = toY(fc + uVal)
+                                        val yLow = toY(max(0.0, fc - uVal))
+                                        if (f1) {
+                                            pathUpper.moveTo(x, yUp)
+                                            pathLower.moveTo(x, yLow)
+                                            f1 = false
+                                        } else {
+                                            pathUpper.lineTo(x, yUp)
+                                            pathLower.lineTo(x, yLow)
+                                        }
                                     }
+                                    drawPath(pathUpper, Color(0xFF38BDF8), style = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))))
+                                    drawPath(pathLower, Color(0xFF38BDF8), style = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))))
+                                }
 
-                                    drawCircle(
-                                        color = pointColor,
-                                        radius = 6f,
-                                        center = Offset(px, py)
-                                    )
-                                    drawCircle(
-                                        color = Color.White,
-                                        radius = 7f,
-                                        center = Offset(px, py),
-                                        style = Stroke(width = 1.5f)
-                                    )
+                                // Target f'c Design Reference line
+                                val fcDesignY = toY(activeSelectedTest.fcDesignMpa)
+                                drawLine(
+                                    RoseAlert.copy(alpha = 0.7f),
+                                    Offset(originX, fcDesignY),
+                                    Offset(w - 10f, fcDesignY),
+                                    strokeWidth = 2f,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                                )
+
+                                // Element point projection dashed lines
+                                val elX = toX(activeSelectedTest.meanCorrected.coerceIn(minR, maxR))
+                                val elY = toY(activeSelectedTest.estimatedFcMpa.coerceIn(minFc, maxFc))
+                                drawLine(EmeraldSuccess.copy(alpha = 0.6f), Offset(elX, originY), Offset(elX, elY), strokeWidth = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+                                drawLine(EmeraldSuccess.copy(alpha = 0.6f), Offset(originX, elY), Offset(elX, elY), strokeWidth = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
+                            }
+
+                            // 5. Test Points
+                            if (showTestPoints) {
+                                val displayedTests = if (activeSelectedTest != null) {
+                                    tests.filter { it.id == activeSelectedTest.id }
+                                } else {
+                                    tests.filter {
+                                        pointStatusFilter == "ALL" || it.status.name == pointStatusFilter
+                                    }
+                                }
+
+                                displayedTests.forEach { test ->
+                                    if (test.status != TestStatus.INVALIDO && test.meanCorrected > 0) {
+                                        val px = toX(test.meanCorrected.coerceIn(minR, maxR))
+                                        val py = toY(test.estimatedFcMpa.coerceIn(minFc, maxFc))
+
+                                        val pointColor = when (test.status) {
+                                            TestStatus.CUMPLE -> EmeraldSuccess
+                                            TestStatus.DUDOSO -> AmberGold
+                                            TestStatus.NO_CUMPLE -> RoseAlert
+                                            TestStatus.INVALIDO -> Color(0xFF8B5CF6)
+                                        }
+
+                                        val isHighlighted = selectedTestOnChart?.id == test.id
+                                        val radius = if (isHighlighted) 9f else 6f
+
+                                        drawCircle(color = pointColor, radius = radius, center = Offset(px, py))
+                                        drawCircle(color = Color.White, radius = radius + 1.5f, center = Offset(px, py), style = Stroke(width = if (isHighlighted) 2.5f else 1.5f))
+                                    }
+                                }
+                            }
+
+                            // 6. Empirical Core Calibration Points (Diamantes amarillos)
+                            if (showCorePoints) {
+                                customCorePoints.forEach { cp ->
+                                    val px = toX(cp.rebound.coerceIn(minR, maxR))
+                                    val py = toY(cp.fcMpa.coerceIn(minFc, maxFc))
+                                    val dSize = 7f
+
+                                    val diamondPath = Path().apply {
+                                        moveTo(px, py - dSize)
+                                        lineTo(px + dSize, py)
+                                        lineTo(px, py + dSize)
+                                        lineTo(px - dSize, py)
+                                        close()
+                                    }
+                                    drawPath(diamondPath, AmberGold)
+                                    drawPath(diamondPath, Slate950, style = Stroke(width = 1.5f))
                                 }
                             }
                         }
@@ -862,59 +1240,170 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Legend Row
+                    // Dynamic Legend
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp, 3.dp).background(BrandSkyLight))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("NTC 3692 / Tipo N", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                        if (showProceqCurve) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp, 3.dp).background(BrandSkyLight))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("NTC 3692", style = MaterialTheme.typography.labelSmall, color = Slate300, fontSize = 10.sp)
+                            }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp, 3.dp).background(AmberGold))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("NSR-10 Agregados Col.", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                        if (showNsr10Curve) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp, 3.dp).background(AmberGold))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("NSR-10 Col.", style = MaterialTheme.typography.labelSmall, color = Slate300, fontSize = 10.sp)
+                            }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(EmeraldSuccess))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Puntos Ensayo", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                        if (activeSelectedTest != null && showElementCurve) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp, 3.dp).background(EmeraldSuccess))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Curva Elemento", style = MaterialTheme.typography.labelSmall, color = EmeraldSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (showCorePoints && customCorePoints.isNotEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).background(AmberGold, RoundedCornerShape(2.dp)))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Núcleos Diamantados", style = MaterialTheme.typography.labelSmall, color = AmberGold, fontSize = 10.sp)
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Selected Point Tooltip Card
-        selectedTestOnChart?.let { test ->
+        // 4. Per-Element Technical Audit & Metrology Card (When element selected)
+        activeSelectedTest?.let { test ->
             item {
                 Card(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Slate850),
-                    border = BorderStroke(1.dp, BrandSkyLight),
+                    border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Elemento: ${test.elementTag} (${test.elementType.label})", fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Rebote Corregido: ${test.meanCorrected} | f'c Est: ${test.estimatedFcMpa} MPa (${test.estimatedFcPsi} PSI)", style = MaterialTheme.typography.bodySmall, color = BrandSkyLight)
-                            Text("f'c Diseño: ${test.fcDesignMpa} MPa | Estado: ${test.status.label} (${test.complianceRatio}%)", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(shape = RoundedCornerShape(6.dp), color = EmeraldSuccess.copy(alpha = 0.2f)) {
+                                    Text(test.elementTag, fontWeight = FontWeight.Black, color = EmeraldSuccess, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(test.elementType.label, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                            Text("${test.status.label} (${test.complianceRatio}%)", fontWeight = FontWeight.Black, color = when(test.status) {
+                                TestStatus.CUMPLE -> EmeraldSuccess
+                                TestStatus.DUDOSO -> AmberGold
+                                TestStatus.NO_CUMPLE -> RoseAlert
+                                TestStatus.INVALIDO -> Color(0xFF8B5CF6)
+                            })
                         }
-                        IconButton(onClick = { selectedTestOnChart = null }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Slate400)
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Metrological parameters table
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("Curva / Modelo:", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                                Text(test.curveModel.label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Slate100)
+                                Text("Ecuación: ${test.statusNotes.let { test.curveModel.formula }}", style = MaterialTheme.typography.labelSmall, color = AmberGold, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("f'c Estimado (± U):", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                                Text("${test.estimatedFcMpa} ± ${test.uncertaintyMpa} MPa", fontWeight = FontWeight.Black, color = BrandSkyLight, fontSize = 15.sp)
+                                Text("${test.estimatedFcPsi} PSI (Diseño: ${test.fcDesignMpa} MPa)", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = Slate700)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Rebote: R_crudo=${test.meanRaw} (ΔR=${test.correctionAngle}) → R_corr=${test.meanCorrected}", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                            Text("CV: ${test.cov}% | s: ${test.stdDev}", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                        }
+
+                        if (test.carbonationDepthMm > 0.0 || test.ultrasonicPulseVelocity > 0.0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                if (test.carbonationDepthMm > 0.0) {
+                                    Text("Carbonatación: ${test.carbonationDepthMm} mm", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                                }
+                                if (test.ultrasonicPulseVelocity > 0.0) {
+                                    Text("UPV SonReb: ${test.ultrasonicPulseVelocity} km/s", style = MaterialTheme.typography.labelSmall, color = BrandSkyLight)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(test.statusNotes, style = MaterialTheme.typography.bodySmall, color = Slate300, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // 5. Empirical Core Drilling Points List (Núcleos de Calibración In-Situ)
+        if (customCorePoints.isNotEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Slate900),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Engineering, contentDescription = null, tint = AmberGold, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Datos de Calibración In-Situ (Núcleos NTC 3658)", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                            }
+                            Text("${customCorePoints.size} puntos", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        customCorePoints.forEach { cp ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .background(Slate850, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(cp.source, fontWeight = FontWeight.Bold, color = Slate200, fontSize = 12.sp)
+                                    Text("Rebote Schmidt R = ${cp.rebound} → f'c Núcleo = ${cp.fcMpa} MPa (${SclerometryNorms.mpaToPsi(cp.fcMpa)} PSI)", style = MaterialTheme.typography.labelSmall, color = AmberGold)
+                                }
+                                IconButton(
+                                    onClick = { customCorePoints.remove(cp) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Eliminar", tint = RoseAlert, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Conversion Table Reference
+        // 6. Comparative Model Table
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -922,28 +1411,105 @@ fun CurveViewerTab(tests: List<SclerometryTest>, project: Project) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text("Tabla de Conversión R vs f'c (NTC 3692)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Comparativa Normativa de Modelos (NTC 3692 / NSR-10 / ASTM)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val referencePoints = listOf(20, 25, 30, 35, 40, 45, 50)
                     referencePoints.forEach { r ->
                         val fcNtc = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.PROCEQ_N_STANDARD)
                         val fcCol = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.NSR10_COLOMBIA)
-                        val psi = SclerometryNorms.mpaToPsi(fcNtc)
+                        val fcAstm = SclerometryNorms.calculateFcFromRebound(r.toDouble(), CurveModel.ASTM_POLYNOMIAL)
 
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Rebote R = $r", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Slate200)
-                            Text("NTC: $fcNtc MPa ($psi PSI)", style = MaterialTheme.typography.bodySmall, color = BrandSkyLight)
+                            Text("Rebote R=$r", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Slate200)
+                            Text("NTC: $fcNtc MPa", style = MaterialTheme.typography.bodySmall, color = BrandSkyLight)
                             Text("NSR-10: $fcCol MPa", style = MaterialTheme.typography.bodySmall, color = AmberGold)
+                            Text("ASTM: $fcAstm MPa", style = MaterialTheme.typography.bodySmall, color = Color(0xFFC084FC))
                         }
                         HorizontalDivider(color = Slate800)
                     }
                 }
             }
         }
+    }
+
+    // Modal to add a new calibration / core extraction data point to the chart
+    if (showAddPointDialog) {
+        var newRebound by remember { mutableStateOf("38.0") }
+        var newFcMpa by remember { mutableStateOf("34.5") }
+        var newSource by remember { mutableStateOf("Extracción de Núcleo (NTC 3658)") }
+
+        AlertDialog(
+            onDismissRequest = { showAddPointDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = EmeraldSuccess)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Agregar Dato de Calibración / Núcleo", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Ingresa los resultados del ensayo de compresión en núcleo diamantado o correlación local:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate300
+                    )
+                    OutlinedTextField(
+                        value = newRebound,
+                        onValueChange = { newRebound = it },
+                        label = { Text("Rebote Schmidt R") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newFcMpa,
+                        onValueChange = { newFcMpa = it },
+                        label = { Text("f'c Núcleo (MPa)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newSource,
+                        onValueChange = { newSource = it },
+                        label = { Text("Descripción / Identificación Núcleo") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val r = newRebound.toDoubleOrNull() ?: 35.0
+                        val fc = newFcMpa.toDoubleOrNull() ?: 28.0
+                        customCorePoints.add(
+                            CalibrationPoint(
+                                id = "cp-${System.currentTimeMillis()}",
+                                rebound = r,
+                                fcMpa = fc,
+                                source = newSource.trim()
+                            )
+                        )
+                        showAddPointDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess)
+                ) {
+                    Text("Agregar al Gráfico", color = Slate950, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddPointDialog = false }) {
+                    Text("Cancelar", color = Slate400)
+                }
+            },
+            containerColor = Slate900
+        )
     }
 }
 

@@ -1,0 +1,260 @@
+import React, { useState } from 'react';
+import { Project, SclerometryTest } from '../types';
+import { CURVE_MODEL_DESCRIPTIONS } from '../utils/sclerometryNorms';
+import { X, FileText, Download, Copy, Check, Printer } from 'lucide-react';
+
+interface ExportReportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  project: Project;
+  tests: SclerometryTest[];
+}
+
+export const ExportReportModal: React.FC<ExportReportModalProps> = ({
+  isOpen,
+  onClose,
+  project,
+  tests
+}) => {
+  const [copied, setCopied] = useState(false);
+  const [reportFormat, setReportFormat] = useState<'text' | 'csv'>('text');
+
+  if (!isOpen) return null;
+
+  const testsCount = tests.length;
+  const passedCount = tests.filter(t => t.status === 'CUMPLE').length;
+  const doubtfulCount = tests.filter(t => t.status === 'DUDOSO').length;
+  const failedCount = tests.filter(t => t.status === 'NO_CUMPLE').length;
+  const invalidCount = tests.filter(t => t.status === 'INVALIDO').length;
+  const compliancePct = testsCount > 0 ? Math.round((passedCount / testsCount) * 100) : 0;
+
+  const generateTextReport = (): string => {
+    const dateStr = new Date().toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let sb = '';
+    sb += '================================================================================\n';
+    sb += '        INFORME TÉCNICO DE ENSAYOS DE ESCLEROMETRÍA EN CONCRETO ENDURECIDO       \n';
+    sb += '           Normativa: NTC 3692 / ASTM C805 / NSR-10 Título C.5 (Colombia)        \n';
+    sb += '================================================================================\n\n';
+    sb += `FECHA DE EMISIÓN:      ${dateStr}\n`;
+    sb += `CÓDIGO DE INFORME:     INF-${project.code}-${new Date().toISOString().slice(0, 10)}\n\n`;
+    sb += '1. INFORMACIÓN GENERAL DE LA OBRA Y RESPONSABLES\n';
+    sb += '--------------------------------------------------------------------------------\n';
+    sb += `Proyecto / Estructura: ${project.name}\n`;
+    sb += `Código de Proyecto:    ${project.code}\n`;
+    sb += `Cliente / Propietario: ${project.client}\n`;
+    sb += `Ubicación:             ${project.location}, ${project.municipality}, ${project.department}\n`;
+    sb += `Contratista:           ${project.contractor}\n`;
+    sb += `Interventoría:         ${project.supervision}\n`;
+    sb += `Ingeniero Responsable: ${project.engineerInCharge} ${project.licenseNumber ? `(Mat. ${project.licenseNumber})` : ''}\n\n`;
+    sb += '2. EQUIPO Y METODOLOGÍA DEL ENSAYO\n';
+    sb += '--------------------------------------------------------------------------------\n';
+    sb += `Equipo Empleado:       ${project.defaultHammerModel} (Serial: ${project.defaultHammerSerial})\n`;
+    sb += `Energía de Impacto:    2.207 N·m (Martillo Schmidt Tipo N)\n`;
+    sb += `Norma de Ensayo:       NTC 3692 (Método para determinar el número de rebote del concreto)\n`;
+    sb += `Criterio Estadístico:  Mínimo 10 lecturas. Descarte automático de lecturas que difieran\n`;
+    sb += `                       en más de 6 unidades respecto al promedio aritmético.\n`;
+    sb += `                       Si se descartan >2 lecturas, el ensayo se anula según NTC 3692.\n`;
+    sb += `Curva de Conversión:   ${CURVE_MODEL_DESCRIPTIONS[project.defaultCurve]?.name || 'Proceq Schmidt Tipo N'}\n\n`;
+    sb += '3. RESUMEN ESTADÍSTICO DE RESULTADOS\n';
+    sb += '--------------------------------------------------------------------------------\n';
+    sb += `Total Elementos Ensayados: ${testsCount}\n`;
+    sb += `• Conformes (CUMPLE >= 95%): ${passedCount} (${compliancePct}%)\n`;
+    sb += `• En Zona Dudosa (80-95%):   ${doubtfulCount}\n`;
+    sb += `• No Conformes (< 80%):       ${failedCount}\n`;
+    sb += `• Ensayos Anulados/Inválidos: ${invalidCount}\n\n`;
+    sb += '4. TABLA DETALLADA DE ELEMENTOS ENSAYADOS\n';
+    sb += '--------------------------------------------------------------------------------\n';
+
+    tests.forEach((t, i) => {
+      sb += `[${i + 1}] Elemento: ${t.elementTag} (${t.elementType}) - ${t.levelAxis}\n`;
+      sb += `    f'c Diseño:       ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
+      sb += `    Lecturas (10):    ${t.readings.join(', ')}\n`;
+      if (t.excludedIndices.length > 0) {
+        sb += `    Descartes NTC:    ${t.excludedIndices.map(idx => `Impacto #${idx + 1} (${t.readings[idx]})`).join(', ')} (> 6 del promedio)\n`;
+      } else {
+        sb += `    Descartes NTC:    Ninguno (100% lecturas válidas dentro del rango)\n`;
+      }
+      sb += `    Estadística R:    R_crudo = ${t.meanRaw} | ΔR = ${t.correctionAngle} | R_corr = ${t.meanCorrected} | CV = ${t.cov}%\n`;
+      sb += `    f'c Estimado:     ${t.estimatedFcMpa} MPa (${t.estimatedFcPsi} PSI / ${t.estimatedFcKgcm2} kg/cm²)\n`;
+      sb += `    Conformidad:      ${t.status} (${t.complianceRatio}% del f'c de diseño)\n`;
+      sb += `    Dictamen:         ${t.statusNotes}\n\n`;
+    });
+
+    sb += '================================================================================\n';
+    sb += '5. DICTAMEN NORMATIVO Y RECOMENDACIONES TÉCNICAS (NSR-10 / NTC 3692)\n';
+    sb += '--------------------------------------------------------------------------------\n';
+    sb += '1. CONFORMIDAD: Los elementos clasificados como CUMPLE demuestran homogeneidad y\n';
+    sb += '   resistencia superficial coherente con el f\'c de diseño especificado.\n';
+    sb += '2. ZONA DUDOSA: Para elementos en zona dudosa (80% <= f\'c < 95%), según NSR-10 C.5.6.5\n';
+    sb += '   se recomienda corroborar mediante extracción de tres núcleos diamantados (NTC 3658 / ASTM C42)\n';
+    sb += '   por cada zona en sospecha.\n';
+    sb += '3. NO CONFORMIDAD: Los elementos clasificados como NO CUMPLE requieren evaluación\n';
+    sb += '   estructural inmediata y revisión por parte del Ingeniero Diseñador Estructural.\n\n';
+    sb += '__________________________________                __________________________________\n';
+    sb += `   ${project.engineerInCharge}                       Interventoría / Supervisión Técnica\n`;
+    sb += `   Ingeniero Especialista                          ${project.supervision}\n`;
+    if (project.licenseNumber) sb += `   Matrícula: ${project.licenseNumber}\n`;
+    sb += '================================================================================\n';
+
+    return sb;
+  };
+
+  const generateCSV = (): string => {
+    let csv = 'No,Elemento,Tipo,Nivel_Eje,fc_Diseno_MPa,fc_Diseno_PSI,Edad_Dias,Angulo,R_Crudo,Delta_R,R_Corregido,Desviacion_s,CV_Porc,fc_Estimado_MPa,fc_Estimado_PSI,fc_Estimado_Kgcm2,Cumplimiento_Porc,Estado,Descartes_Count,Operador\n';
+    tests.forEach((t, i) => {
+      csv += `${i + 1},"${t.elementTag}","${t.elementType}","${t.levelAxis}",${t.fcDesignMpa},${t.fcDesignPsi},${t.concreteAgeDays},${t.impactAngle},${t.meanRaw},${t.correctionAngle},${t.meanCorrected},${t.stdDev},${t.cov},${t.estimatedFcMpa},${t.estimatedFcPsi},${t.estimatedFcKgcm2},${t.complianceRatio},"${t.status}",${t.excludedIndices.length},"${t.operatorName}"\n`;
+    });
+    return csv;
+  };
+
+  const handleCopy = () => {
+    const content = reportFormat === 'text' ? generateTextReport() : generateCSV();
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleDownload = () => {
+    const isCsv = reportFormat === 'csv';
+    const content = isCsv ? generateCSV() : generateTextReport();
+    const mime = isCsv ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
+    const ext = isCsv ? 'csv' : 'txt';
+    const filename = `Informe_Esclerometria_${project.code}_${new Date().toISOString().slice(0, 10)}.${ext}`;
+
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const content = generateTextReport().replace(/\n/g, '<br/>').replace(/ /g, '&nbsp;');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Informe Esclerometría - ${project.name}</title>
+          <style>
+            body { font-family: monospace; font-size: 12px; padding: 20px; line-height: 1.4; color: #000; }
+          </style>
+        </head>
+        <body>
+          <div>${content}</div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col">
+        
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 border-b border-slate-700 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-white">
+                Informe Técnico Oficial NSR-10 / NTC 3692
+              </h2>
+              <p className="text-xs text-slate-400">
+                Certificado de evaluación no destructiva y exportación de datos de obra
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 font-semibold">Formato:</span>
+            <button
+              onClick={() => setReportFormat('text')}
+              className={`px-3 py-1 rounded-lg font-bold transition ${
+                reportFormat === 'text'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Informe Técnico (TXT / Imprimir)
+            </button>
+            <button
+              onClick={() => setReportFormat('csv')}
+              className={`px-3 py-1 rounded-lg font-bold transition ${
+                reportFormat === 'csv'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              Tabla Excel (CSV)
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span>Imprimir</span>
+            </button>
+            <button
+              onClick={handleCopy}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              <span>{copied ? 'Copiado' : 'Copiar'}</span>
+            </button>
+            <button
+              onClick={handleDownload}
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Descargar Archivo</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Content Viewer */}
+        <div className="p-4 overflow-y-auto grow bg-slate-950">
+          <pre className="p-4 bg-slate-900 border border-slate-800 rounded-xl text-slate-300 font-mono text-[11px] sm:text-xs whitespace-pre-wrap select-all leading-relaxed">
+            {reportFormat === 'text' ? generateTextReport() : generateCSV()}
+          </pre>
+        </div>
+
+        {/* Footer */}
+        <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs shrink-0">
+          <span className="text-slate-400">
+            {testsCount} elementos incluidos • {compliancePct}% índice de conformidad
+          </span>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+          >
+            Cerrar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};

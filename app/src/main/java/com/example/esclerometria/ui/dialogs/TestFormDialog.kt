@@ -49,6 +49,15 @@ fun TestFormDialog(
     var impactAngle by remember { mutableStateOf(initialTest?.impactAngle ?: ImpactAngle.HORIZONTAL) }
     var surfaceCondition by remember { mutableStateOf(initialTest?.surfaceCondition ?: SurfaceCondition.CARBORUNDUM) }
     var curveModel by remember { mutableStateOf(initialTest?.curveModel ?: CurveModel.PROCEQ_N_STANDARD) }
+    var customA by remember { mutableDoubleStateOf(initialTest?.customA ?: 0.0245) }
+    var customB by remember { mutableDoubleStateOf(initialTest?.customB ?: 2.052) }
+    var customC by remember { mutableDoubleStateOf(initialTest?.customC ?: 0.0) }
+    var upvKmS by remember { mutableDoubleStateOf(initialTest?.ultrasonicPulseVelocity ?: 0.0) }
+    var carbonationDepthMm by remember { mutableDoubleStateOf(initialTest?.carbonationDepthMm ?: 1.0) }
+    var moistureFactor by remember { mutableDoubleStateOf(initialTest?.moistureFactor ?: 1.0) }
+    var formworkFactor by remember { mutableDoubleStateOf(initialTest?.formworkFactor ?: 1.0) }
+    var coreCalibrationData by remember { mutableStateOf(initialTest?.coreCalibrationData ?: "32:24.5; 36:31.2; 40:38.9") }
+    var showCoreFittingDialog by remember { mutableStateOf(false) }
     var operatorName by remember { mutableStateOf(initialTest?.operatorName ?: "Tec. Jhon Fredy Piraquive") }
     var notes by remember { mutableStateOf(initialTest?.notes ?: "") }
 
@@ -61,12 +70,31 @@ fun TestFormDialog(
     val readings = remember { mutableStateListOf<Int>().apply { addAll(initialReadings) } }
 
     // Live reactive calculation
-    val evaluation = remember(readings.toList(), impactAngle, fcDesignMpa, curveModel) {
+    val evaluation = remember(
+        readings.toList(),
+        impactAngle,
+        fcDesignMpa,
+        curveModel,
+        customA,
+        customB,
+        customC,
+        upvKmS,
+        carbonationDepthMm,
+        moistureFactor,
+        formworkFactor
+    ) {
         SclerometryNorms.evaluateSclerometryTest(
             readings = readings.toList(),
             angle = impactAngle,
             fcDesignMpa = fcDesignMpa,
-            model = curveModel
+            model = curveModel,
+            customA = customA,
+            customB = customB,
+            customC = customC,
+            upvKmS = upvKmS,
+            carbonationDepthMm = carbonationDepthMm,
+            moistureFactor = moistureFactor,
+            formworkFactor = formworkFactor
         )
     }
 
@@ -238,13 +266,173 @@ fun TestFormDialog(
                         }
                     }
 
-                    // 4. 10 Readings Input Grid
+                    // 4. Per-Element Calibration Curve (NTC 3692 / NSR-10 / ISO 1920-7)
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Slate850),
+                        border = BorderStroke(1.dp, BrandSky.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Tune, contentDescription = null, tint = BrandSkyLight, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("4. Curva de Calibración & Parámetros por Elemento", fontWeight = FontWeight.Bold, color = Slate100, fontSize = 13.sp)
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = BrandSky.copy(alpha = 0.2f)
+                                ) {
+                                    Text("NSR-10 / ISO 1920-7", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = BrandSkyLight, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                }
+                            }
+
+                            Text("Selecciona el modelo de correlación específico para este elemento:", style = MaterialTheme.typography.labelSmall, color = Slate400)
+
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(CurveModel.entries) { model ->
+                                    FilterChip(
+                                        selected = curveModel == model,
+                                        onClick = { curveModel = model },
+                                        label = { Text(model.label, fontSize = 11.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = BrandSky,
+                                            selectedLabelColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Slate900,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Ecuación activa: ${evaluation.formulaUsed}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = AmberGold,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+
+                            // Dynamic inputs according to model
+                            if (curveModel == CurveModel.CUSTOM_CALIBRATED) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = "$customA",
+                                        onValueChange = { customA = it.toDoubleOrNull() ?: customA },
+                                        label = { Text("Coeficiente a") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = "$customB",
+                                        onValueChange = { customB = it.toDoubleOrNull() ?: customB },
+                                        label = { Text("Exponente b") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Button(
+                                        onClick = { showCoreFittingDialog = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Slate700),
+                                        modifier = Modifier.padding(top = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Ajustar Núcleos", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+
+                            if (curveModel == CurveModel.SONREB_COMBINED) {
+                                OutlinedTextField(
+                                    value = if (upvKmS == 0.0) "" else "$upvKmS",
+                                    onValueChange = { upvKmS = it.toDoubleOrNull() ?: 0.0 },
+                                    label = { Text("Velocidad de Pulso Ultrasónico UPV (km/s)") },
+                                    placeholder = { Text("ej: 4.15 km/s (NTC 4325)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            // Environmental & Pathological Factors
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = "$carbonationDepthMm",
+                                    onValueChange = { carbonationDepthMm = it.toDoubleOrNull() ?: carbonationDepthMm },
+                                    label = { Text("Profundidad Carbonatación (mm)") },
+                                    placeholder = { Text("0 a 10 mm (Fenolftaleína)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                var expandedMoist by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedTextField(
+                                        value = if (moistureFactor == 1.0) "Seco al aire (1.0)" else "Saturado/Húmedo (1.15)",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Estado de Humedad") },
+                                        trailingIcon = {
+                                            IconButton(onClick = { expandedMoist = true }) {
+                                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().clickable { expandedMoist = true }
+                                    )
+                                    DropdownMenu(
+                                        expanded = expandedMoist,
+                                        onDismissRequest = { expandedMoist = false },
+                                        modifier = Modifier.background(Slate850)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Seco al aire (Factor = 1.00)", color = Slate100) },
+                                            onClick = {
+                                                moistureFactor = 1.0
+                                                expandedMoist = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Húmedo / Saturado (Factor = 1.15)", color = Slate100) },
+                                            onClick = {
+                                                moistureFactor = 1.15
+                                                expandedMoist = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. 10 Readings Input Grid
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("4. Lecturas de Rebote (10 Impactos)", fontWeight = FontWeight.Bold, color = EmeraldSuccess, fontSize = 13.sp)
+                        Text("5. Lecturas de Rebote (10 Impactos)", fontWeight = FontWeight.Bold, color = EmeraldSuccess, fontSize = 13.sp)
                         TextButton(
                             onClick = {
                                 // Random realistic readings around 36
@@ -298,7 +486,7 @@ fun TestFormDialog(
                         }
                     }
 
-                    // 5. Operator & Notes
+                    // 6. Operator & Notes
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -316,7 +504,7 @@ fun TestFormDialog(
                         value = notes,
                         onValueChange = { notes = it },
                         label = { Text("Observaciones de Campo") },
-                        placeholder = { Text("ej: Superficie pulida, sonido seco y metálico...") },
+                        placeholder = { Text("ej: Superficie pulida con piedra de carborundo, sonido seco y metálico...") },
                         maxLines = 2,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -354,8 +542,16 @@ fun TestFormDialog(
                                 hammerSerial = "SCH-N-88492-COL",
                                 impactAngle = impactAngle,
                                 surfaceCondition = surfaceCondition,
-                                carbonationDepthMm = 1.5,
+                                carbonationDepthMm = carbonationDepthMm,
                                 curveModel = curveModel,
+                                customA = customA,
+                                customB = customB,
+                                customC = customC,
+                                ultrasonicPulseVelocity = upvKmS,
+                                moistureFactor = moistureFactor,
+                                formworkFactor = formworkFactor,
+                                uncertaintyMpa = evaluation.uncertaintyMpa,
+                                coreCalibrationData = coreCalibrationData,
                                 readings = readings.toList(),
                                 excludedIndices = evaluation.excludedIndices,
                                 meanRaw = evaluation.meanRaw,
@@ -388,6 +584,74 @@ fun TestFormDialog(
             }
         }
     }
+
+    // Modal to fit regression coefficients from Core drilling results
+    if (showCoreFittingDialog) {
+        var dataInput by remember { mutableStateOf(coreCalibrationData) }
+        var regressionResult by remember { mutableStateOf<Triple<Double, Double, Double>?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showCoreFittingDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Analytics, contentDescription = null, tint = AmberGold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Regresión por Núcleos In-Situ (ISO 1920-7)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Ingresa los pares de datos [Rebote : f'c Núcleo (MPa)] obtenidos de ensayos destructivos (NTC 3658 / ASTM C42) separados por punto y coma:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate300
+                    )
+                    OutlinedTextField(
+                        value = dataInput,
+                        onValueChange = {
+                            dataInput = it
+                            regressionResult = SclerometryNorms.fitPowerRegressionFromCoreData(it)
+                        },
+                        placeholder = { Text("ej: 30:22.5; 35:31.0; 40:39.5") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val fit = regressionResult ?: SclerometryNorms.fitPowerRegressionFromCoreData(dataInput)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Slate850,
+                        border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Curva Ajustada: f'c = ${fit.first} · R^${fit.second}", fontWeight = FontWeight.Bold, color = AmberGold, fontSize = 13.sp)
+                            Text("Coeficiente de Determinación R² = ${fit.third}", style = MaterialTheme.typography.labelSmall, color = Slate300)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val fit = regressionResult ?: SclerometryNorms.fitPowerRegressionFromCoreData(dataInput)
+                        customA = fit.first
+                        customB = fit.second
+                        coreCalibrationData = dataInput
+                        showCoreFittingDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+                ) {
+                    Text("Aplicar al Elemento", color = Slate950, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCoreFittingDialog = false }) {
+                    Text("Cancelar", color = Slate400)
+                }
+            },
+            containerColor = Slate900
+        )
+    }
 }
 
 @Composable
@@ -409,12 +673,23 @@ fun LiveCalculationCard(evaluation: EvaluationResult, fcDesignMpa: Double) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Cálculo en Tiempo Real NTC 3692",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Slate300
-                )
+                Column {
+                    Text(
+                        text = "Evaluación Metrológica NTC 3692 / NSR-10",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate300
+                    )
+                    if (evaluation.formulaUsed.isNotBlank()) {
+                        Text(
+                            text = evaluation.formulaUsed,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = BrandSkyLight,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = when (evaluation.status) {
@@ -446,7 +721,7 @@ fun LiveCalculationCard(evaluation: EvaluationResult, fcDesignMpa: Double) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Rebote Corregido", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                    Text("Rebote Corregido (R_corr)", style = MaterialTheme.typography.labelSmall, color = Slate400)
                     Text(
                         "${evaluation.meanCorrected} (ΔR: ${evaluation.correctionAngle})",
                         fontWeight = FontWeight.Bold,
@@ -456,9 +731,9 @@ fun LiveCalculationCard(evaluation: EvaluationResult, fcDesignMpa: Double) {
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("f'c Estimado", style = MaterialTheme.typography.labelSmall, color = Slate400)
+                    Text("f'c Estimado (± U)", style = MaterialTheme.typography.labelSmall, color = Slate400)
                     Text(
-                        "${evaluation.estimatedFcMpa} MPa",
+                        "${evaluation.estimatedFcMpa} ± ${evaluation.uncertaintyMpa} MPa",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
                         color = BrandSkyLight

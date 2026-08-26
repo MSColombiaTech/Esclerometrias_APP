@@ -201,22 +201,32 @@ fun generateTechnicalReport(project: Project, tests: List<SclerometryTest>): Str
     sb.appendLine("--------------------------------------------------------------------------------")
     tests.forEachIndexed { i, t ->
         sb.appendLine("[${i + 1}] Elemento: ${t.elementTag} (${t.elementType.label}) - ${t.levelAxis}")
-        sb.appendLine("    f'c Diseño: ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle.label}")
-        sb.appendLine("    Lecturas:   ${t.readings.joinToString(", ")}")
+        sb.appendLine("    f'c Diseño:       ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle.label}")
+        sb.appendLine("    Modelo Curva:     ${t.curveModel.label}")
+        sb.appendLine("    Lecturas (10):    ${t.readings.joinToString(", ")}")
         if (t.excludedIndices.isNotEmpty()) {
-            sb.appendLine("    Descartes:  ${t.excludedIndices.map { "R-${it + 1} (${t.readings[it]})" }.joinToString(", ")}")
+            sb.appendLine("    Descartes NTC:    ${t.excludedIndices.map { "R-${it + 1} (${t.readings[it]})" }.joinToString(", ")} (Lecturas con desviación > 6 unidades)")
+        } else {
+            sb.appendLine("    Descartes NTC:    Ninguno (100% lecturas válidas)")
         }
-        sb.appendLine("    Rebote:     R_crudo=${t.meanRaw} | ΔR=${t.correctionAngle} | R_corr=${t.meanCorrected} | CV=${t.cov}%")
-        sb.appendLine("    Resistencia: f'c Estimado = ${t.estimatedFcMpa} MPa (${t.estimatedFcPsi} PSI, ${t.estimatedFcKgcm2} kg/cm²)")
-        sb.appendLine("    Resultado:   ${t.status.label} (${t.complianceRatio}%) - ${t.statusNotes}")
+        sb.appendLine("    Estadística R:    R_crudo = ${t.meanRaw} | ΔR = ${t.correctionAngle} | R_corregido = ${t.meanCorrected} | s = ${t.stdDev} | CV = ${t.cov}%")
+        if (t.carbonationDepthMm > 0.0 || t.ultrasonicPulseVelocity > 0.0 || t.moistureFactor != 1.0) {
+            sb.appendLine("    Factores Campo:   Carbonatación = ${t.carbonationDepthMm} mm | Humedad = ${t.moistureFactor} | UPV = ${if (t.ultrasonicPulseVelocity > 0) "${t.ultrasonicPulseVelocity} km/s" else "N/A"}")
+        }
+        sb.appendLine("    f'c Estimado (±U): ${t.estimatedFcMpa} ± ${t.uncertaintyMpa} MPa (${t.estimatedFcPsi} PSI, ${t.estimatedFcKgcm2} kg/cm²)")
+        sb.appendLine("    Conformidad:      ${t.status.label} (${t.complianceRatio}% del diseño)")
+        sb.appendLine("    Dictamen:         ${t.statusNotes}")
         sb.appendLine()
     }
 
     sb.appendLine("================================================================================")
-    sb.appendLine("  DICTAMEN NORMATIVO NSR-10 (TÍTULO C):")
-    sb.appendLine("  - Los elementos marcados como CUMPLE satisfacen el f'c de diseño.")
-    sb.appendLine("  - Los elementos en ZONA DUDOSA requieren verificación mediante núcleos diamantados")
-    sb.appendLine("    según NSR-10 C.5.6.5 y NTC 3658 (ASTM C42).")
+    sb.appendLine("  DICTAMEN NORMATIVO Y REGLAS DE DECISIÓN (NSR-10 / ISO 17025 / NTC 3692):")
+    sb.appendLine("  1. CONFORME (CUMPLE): f'c estimado >= 95% del f'c de diseño especificado.")
+    sb.appendLine("  2. ZONA DUDOSA: 80% <= f'c estimado < 95%. Se recomienda realizar ensayos")
+    sb.appendLine("     complementarios de extracción de núcleos diamantados según NSR-10 C.5.6.5")
+    sb.appendLine("     y NTC 3658 (ASTM C42) o ultrasonido SonReb (NTC 4325).")
+    sb.appendLine("  3. NO CONFORME: f'c estimado < 80%. Requiere evaluación estructural inmediata.")
+    sb.appendLine("  4. INCERTIDUMBRE (U, k=2): Calculada bajo lineamientos GUM / ISO 17025.")
     sb.appendLine("================================================================================")
 
     return sb.toString()
