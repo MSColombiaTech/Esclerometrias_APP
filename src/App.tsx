@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Project, SclerometryTest, ImpactAngle, ElementType, TestStatus, UserProfile, CloudSyncStatus } from './types';
+import { Project, SclerometryTest, ImpactAngle, ElementType, TestStatus } from './types';
 import { 
   getStoredProjects, 
   saveProjects, 
@@ -16,19 +16,9 @@ import { QuickCalculatorModal } from './components/QuickCalculatorModal';
 import { ProjectFormModal } from './components/ProjectFormModal';
 import { ExportReportModal } from './components/ExportReportModal';
 import { NormInfoModal } from './components/NormInfoModal';
-import { AuthModal } from './components/AuthModal';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useTheme } from './context/ThemeContext';
 import { generateSclerometryPDF } from './utils/pdfGenerator';
-import {
-  getSupabase,
-  getCurrentUser,
-  mapSupabaseUserToProfile,
-  syncProjectsToCloud,
-  syncTestsToCloud,
-  fetchProjectsFromCloud,
-  fetchTestsFromCloud
-} from './lib/supabase';
 import { 
   Building2, 
   Layers, 
@@ -57,11 +47,7 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   FileDown,
-  Info,
-  Cloud,
-  User,
-  LogIn,
-  RefreshCw
+  Info
 } from 'lucide-react';
 
 export function App() {
@@ -91,19 +77,8 @@ export function App() {
   const [isQuickCalcOpen, setIsQuickCalcOpen] = useState(false);
   const [isExportReportOpen, setIsExportReportOpen] = useState(false);
   const [isNormInfoOpen, setIsNormInfoOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Supabase User & Cloud Sync State
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>('idle');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  // Initialize storage and Supabase session
+  // Initialize storage
   useEffect(() => {
     const loadedProjects = getStoredProjects();
     const loadedTests = getStoredTests();
@@ -112,129 +87,17 @@ export function App() {
     setProjects(loadedProjects);
     setTests(loadedTests);
     setActiveId(currentActiveId);
-
-    // Check existing Supabase session
-    getCurrentUser().then(user => {
-      if (user) {
-        setCurrentUser(user);
-        setSyncStatus('synced');
-      }
-    });
-
-    // Listen to Supabase auth state changes (OAuth redirects, login, logout)
-    const supabase = getSupabase();
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
-          const profile = mapSupabaseUserToProfile(session.user);
-          setCurrentUser(profile);
-          setSyncStatus('synced');
-        } else {
-          setCurrentUser(null);
-          setSyncStatus('idle');
-        }
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
   }, []);
 
-  // Sync projects and tests to storage + cloud (if logged in)
-  const handleSaveProjects = async (newProjects: Project[]) => {
+  // Sync projects and tests to storage
+  const handleSaveProjects = (newProjects: Project[]) => {
     setProjects(newProjects);
     saveProjects(newProjects);
-
-    if (currentUser) {
-      setSyncStatus('syncing');
-      const res = await syncProjectsToCloud(newProjects, currentUser.id);
-      if (res.success) {
-        setSyncStatus('synced');
-      } else {
-        setSyncStatus('error');
-      }
-    }
   };
 
-  const handleSaveTests = async (newTests: SclerometryTest[]) => {
+  const handleSaveTests = (newTests: SclerometryTest[]) => {
     setTests(newTests);
     saveTests(newTests);
-
-    if (currentUser) {
-      setSyncStatus('syncing');
-      const res = await syncTestsToCloud(newTests, currentUser.id);
-      if (res.success) {
-        setSyncStatus('synced');
-      } else {
-        setSyncStatus('error');
-      }
-    }
-  };
-
-  // Manual Push to Supabase Cloud
-  const handleSyncToCloud = async () => {
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    setSyncStatus('syncing');
-    try {
-      const resPrj = await syncProjectsToCloud(projects, currentUser.id);
-      const resTst = await syncTestsToCloud(tests, currentUser.id);
-      if (resPrj.success && resTst.success) {
-        setSyncStatus('synced');
-        showToast('✓ ¡Todos los datos sincronizados en Supabase Cloud!');
-      } else {
-        setSyncStatus('error');
-        showToast(`Error al sincronizar: ${resPrj.error || resTst.error || 'Verifica la conexión'}`);
-      }
-    } catch (e) {
-      setSyncStatus('error');
-      showToast('Error al conectar con Supabase Cloud.');
-    }
-  };
-
-  // Manual Pull from Supabase Cloud
-  const handlePullFromCloud = async () => {
-    if (!currentUser) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    setSyncStatus('syncing');
-    try {
-      const cloudPrjs = await fetchProjectsFromCloud(currentUser.id);
-      const cloudTsts = await fetchTestsFromCloud(currentUser.id);
-
-      if (cloudPrjs.error || cloudTsts.error) {
-        setSyncStatus('error');
-        showToast(`Error al descargar: ${cloudPrjs.error || cloudTsts.error}`);
-        return;
-      }
-
-      if (cloudPrjs.projects.length > 0) {
-        // Merge or replace
-        const combinedProjects = [...cloudPrjs.projects];
-        setProjects(combinedProjects);
-        saveProjects(combinedProjects);
-        setActiveId(combinedProjects[0]?.id || null);
-        setActiveProjectId(combinedProjects[0]?.id || '');
-      }
-
-      if (cloudTsts.tests.length > 0) {
-        const combinedTests = [...cloudTsts.tests];
-        setTests(combinedTests);
-        saveTests(combinedTests);
-      }
-
-      setSyncStatus('synced');
-      showToast(`✓ Descargados ${cloudPrjs.projects.length} proyectos y ${cloudTsts.tests.length} ensayos desde Supabase.`);
-    } catch (e) {
-      setSyncStatus('error');
-      showToast('Error al descargar datos de la nube.');
-    }
   };
 
   // Active Project object
@@ -467,39 +330,6 @@ export function App() {
                   </button>
                 </>
               )}
-
-              {/* Supabase Cloud & OAuth Sync Button */}
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition shadow-sm ${
-                  currentUser
-                    ? 'bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30'
-                    : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
-                }`}
-                title="Gestión de cuenta Supabase, OAuth2 y sincronización en la nube"
-              >
-                {currentUser ? (
-                  <>
-                    {currentUser.avatarUrl ? (
-                      <img 
-                        src={currentUser.avatarUrl} 
-                        alt="User" 
-                        className="h-4 w-4 rounded-full object-cover border border-emerald-400" 
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <Cloud className={`h-4 w-4 ${syncStatus === 'syncing' ? 'animate-pulse text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`} />
-                    )}
-                    <span className="max-w-[120px] truncate">{currentUser.fullName?.split(' ')[0] || 'Mi Cuenta'}</span>
-                    <span className={`h-2 w-2 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-400 animate-ping' : syncStatus === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                  </>
-                ) : (
-                  <>
-                    <Cloud className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Guardar en Nube</span>
-                  </>
-                )}
-              </button>
 
               {/* Backup Menu */}
               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-300 dark:border-slate-700">
@@ -1044,33 +874,6 @@ export function App() {
           isOpen={isNormInfoOpen}
           onClose={() => setIsNormInfoOpen(false)}
         />
-      )}
-
-      {/* Supabase Authentication & Cloud Sync Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        currentUser={currentUser}
-        syncStatus={syncStatus}
-        onSyncToCloud={handleSyncToCloud}
-        onPullFromCloud={handlePullFromCloud}
-        onUserChange={(user) => {
-          setCurrentUser(user);
-          if (user) {
-            setSyncStatus('synced');
-            showToast(`¡Bienvenido ${user.fullName || user.email}!`);
-          } else {
-            setSyncStatus('idle');
-          }
-        }}
-      />
-
-      {/* Floating Notification Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-slate-900 text-white dark:bg-emerald-600 dark:text-white rounded-2xl shadow-2xl border border-slate-700 dark:border-emerald-400 flex items-center gap-2.5 text-xs font-bold animate-bounce-short">
-          <Sparkles className="h-4 w-4 text-emerald-400 dark:text-white" />
-          <span>{toastMessage}</span>
-        </div>
       )}
 
     </div>

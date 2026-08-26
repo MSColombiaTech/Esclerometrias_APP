@@ -95,15 +95,4 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   testsCount?: number;
-  userId?: string;
 }
-
-export interface UserProfile {
-  id: string;
-  email?: string;
-  fullName?: string;
-  avatarUrl?: string;
-  provider?: string;
-}
-
-export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'offline';
