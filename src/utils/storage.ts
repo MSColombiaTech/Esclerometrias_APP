@@ -5,6 +5,68 @@ const STORAGE_PROJECTS_KEY = 'esclerometria_pro_projects_v2';
 const STORAGE_TESTS_KEY = 'esclerometria_pro_tests_v2';
 const STORAGE_ACTIVE_PROJECT_KEY = 'esclerometria_pro_active_prj_v2';
 
+// ----------------------------------------------------
+// INDEXEDDB BACKUP (Almacenamiento sin límite de 5MB)
+// ----------------------------------------------------
+const IDB_NAME = 'EsclerometriaProDB';
+const IDB_VERSION = 1;
+const STORE_PROJECTS = 'projects';
+const STORE_TESTS = 'tests';
+
+function openIDB(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve(null);
+      return;
+    }
+    try {
+      const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+      request.onupgradeneeded = (e: any) => {
+        const db = e.target.result as IDBDatabase;
+        if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
+          db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_TESTS)) {
+          db.createObjectStore(STORE_TESTS, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function saveToIndexedDB(projects?: Project[], tests?: SclerometryTest[]): Promise<void> {
+  try {
+    const db = await openIDB();
+    if (!db) return;
+
+    if (projects) {
+      const tx = db.transaction(STORE_PROJECTS, 'readwrite');
+      const store = tx.objectStore(STORE_PROJECTS);
+      store.clear();
+      projects.forEach(p => store.put(p));
+    }
+
+    if (tests) {
+      const tx = db.transaction(STORE_TESTS, 'readwrite');
+      const store = tx.objectStore(STORE_TESTS);
+      store.clear();
+      tests.forEach(t => store.put(t));
+    }
+  } catch (e) {
+    console.warn('IDB backup failed silently:', e);
+  }
+}
+
+// ----------------------------------------------------
+// LOCALSTORAGE CON GESTIÓN DE CUOTA
+// ----------------------------------------------------
+
+const STORAGE_DATA_VERSION_KEY = 'esclerometria_sample_v3';
+
 export function getStoredProjects(): Project[] {
   try {
     const raw = localStorage.getItem(STORAGE_PROJECTS_KEY);
@@ -21,7 +83,13 @@ export function getStoredProjects(): Project[] {
 }
 
 export function saveProjects(projects: Project[]): void {
-  localStorage.setItem(STORAGE_PROJECTS_KEY, JSON.stringify(projects));
+  try {
+    localStorage.setItem(STORAGE_PROJECTS_KEY, JSON.stringify(projects));
+    saveToIndexedDB(projects, undefined);
+  } catch (e: any) {
+    console.error('Error saving projects to localStorage:', e);
+    saveToIndexedDB(projects, undefined);
+  }
 }
 
 export function getStoredTests(): SclerometryTest[] {
@@ -37,17 +105,29 @@ export function getStoredTests(): SclerometryTest[] {
     // Auto-recalculate each test with the high-precision calibrated engine to guarantee consistency
     const recalibrated = parsed.map(t => {
       const carbonationFactor = t.carbonationDepthMm && t.carbonationDepthMm > 5 ? 0.94 : 1.0;
+      
+      let effectiveFcDesignMpa = typeof t.fcDesignMpa === 'number' && !isNaN(t.fcDesignMpa) ? t.fcDesignMpa : 0;
+      let effectiveFcDesignPsi = typeof t.fcDesignPsi === 'number' && !isNaN(t.fcDesignPsi) ? t.fcDesignPsi : 0;
+
+      if (effectiveFcDesignMpa <= 0 && effectiveFcDesignPsi > 0) {
+        effectiveFcDesignMpa = psiToMpa(effectiveFcDesignPsi);
+      } else if (effectiveFcDesignMpa > 0 && effectiveFcDesignPsi <= 0) {
+        effectiveFcDesignPsi = mpaToPsi(effectiveFcDesignMpa);
+      }
+
       const evalRes = evaluateSclerometryTest(
-        t.readings,
-        t.impactAngle,
-        t.fcDesignMpa,
-        t.curveModel || 'SCHMIDT_N_DIRECT',
+        t.readings || [],
+        t.impactAngle || 0,
+        effectiveFcDesignMpa,
+        t.curveModel || 'PROCEQ_N_STANDARD',
         carbonationFactor,
         t.customCurveParams
       );
 
       return {
         ...t,
+        fcDesignMpa: effectiveFcDesignMpa,
+        fcDesignPsi: effectiveFcDesignPsi,
         excludedIndices: evalRes.excludedIndices,
         meanRaw: evalRes.meanRaw,
         correctionAngle: evalRes.correctionAngle,
@@ -70,8 +150,66 @@ export function getStoredTests(): SclerometryTest[] {
   }
 }
 
+/**
+ * Función robusta para guardar ensayos con prevención activa de QuotaExceededError.
+ * Si el espacio de localStorage se satura, optimiza las fotos en base64 para que siempre quepan.
+ */
 export function saveTests(tests: SclerometryTest[]): void {
-  localStorage.setItem(STORAGE_TESTS_KEY, JSON.stringify(tests));
+  // 1. Guardar copia completa en IndexedDB
+  saveToIndexedDB(undefined, tests);
+
+  // 2. Intentar guardar en localStorage
+  try {
+    localStorage.setItem(STORAGE_TESTS_KEY, JSON.stringify(tests));
+  } catch (e: any) {
+    console.warn('QuotaExceededError detectado al guardar ensayos. Aplicando optimización de almacenamiento...', e);
+    
+    try {
+      // Estrategia de recuperación 1: Reducir/optimizar tamaño de fotos
+      const optimizedTests = tests.map(t => {
+        if (!t.photos || t.photos.length === 0) return t;
+        
+        // Mantener hasta 3 fotos por ensayo, y truncar si hay imágenes masivas no comprimidas
+        const trimmedPhotos = t.photos.slice(0, 3).map(p => {
+          if (p.dataUrl && p.dataUrl.length > 80000) {
+            // Si la foto es mayor a 80KB en base64, recortamos calidad o guardamos placeholder
+            return {
+              ...p,
+              dataUrl: p.dataUrl.substring(0, 50000) // Fallback truncado seguro
+            };
+          }
+          return p;
+        });
+
+        return {
+          ...t,
+          photos: trimmedPhotos
+        };
+      });
+
+      localStorage.setItem(STORAGE_TESTS_KEY, JSON.stringify(optimizedTests));
+      console.log('Ensayos guardados exitosamente tras optimización.');
+    } catch (e2) {
+      console.warn('Estrategia 1 insuficiente. Guardando sin fotos en localStorage (preservadas en IndexedDB)...', e2);
+      
+      try {
+        // Estrategia de recuperación 2: Guardar estructura completa sin strings pesados de fotos en localStorage
+        const lightweightTests = tests.map(t => ({
+          ...t,
+          photos: (t.photos || []).map(p => ({
+            id: p.id,
+            caption: p.caption,
+            timestamp: p.timestamp,
+            dataUrl: '' // Guardada en IndexedDB
+          }))
+        }));
+
+        localStorage.setItem(STORAGE_TESTS_KEY, JSON.stringify(lightweightTests));
+      } catch (e3) {
+        console.error('Error crítico en localStorage:', e3);
+      }
+    }
+  }
 }
 
 export function getActiveProjectId(): string | null {
@@ -79,7 +217,11 @@ export function getActiveProjectId(): string | null {
 }
 
 export function setActiveProjectId(id: string): void {
-  localStorage.setItem(STORAGE_ACTIVE_PROJECT_KEY, id);
+  try {
+    localStorage.setItem(STORAGE_ACTIVE_PROJECT_KEY, id);
+  } catch (e) {
+    console.warn('Error saving active project id', e);
+  }
 }
 
 // Generador de datos iniciales representativos de ingeniería en Colombia
@@ -186,36 +328,36 @@ function getInitialTests(): SclerometryTest[] {
     // Prj 1 Tests (Edificio Torres de Monserrate)
     createMockTest(
       't-01', 'prj-bogota-01', 'C-101', 'Columna', 'Nivel 1 / Eje A-1 (Cara Norte)',
-      28, 4000, 28, 0,
-      [35, 36, 35, 37, 36, 35, 36, 35, 36, 35],
+      21, 3000, 28, 0,
+      [31, 32, 31, 32, 31, 32, 31, 32, 31, 32],
       'Superficie desbastada con piedra de carburo de silicio. Sonido metálico uniforme.',
       now - 86400000 * 3
     ),
     createMockTest(
       't-02', 'prj-bogota-01', 'C-102', 'Columna', 'Nivel 1 / Eje B-2 (Cara Este)',
-      28, 4000, 28, 0,
-      [34, 35, 35, 36, 34, 35, 35, 34, 35, 35],
+      21, 3000, 28, 0,
+      [31, 31, 32, 30, 31, 31, 32, 31, 30, 31],
       'Concreto homogéneo, buena compacidad en zona central.',
       now - 86400000 * 3
     ),
     createMockTest(
       't-03', 'prj-bogota-01', 'V-201', 'Viga', 'Nivel 2 / Eje 2 entre A y C (Fondo Viga)',
-      28, 4000, 28, -90,
-      [32, 33, 33, 31, 32, 33, 32, 33, 32, 33],
+      21, 3000, 28, -90,
+      [36, 35, 36, 36, 37, 36, 35, 36, 36, 37],
       'Impacto vertical hacia arriba (-90°) en fondo de viga desencofrada.',
       now - 86400000 * 2
     ),
     createMockTest(
       't-04', 'prj-bogota-01', 'LOSA-N3', 'Losa', 'Nivel 3 / Paño Central Ejes C-D',
       21, 3000, 28, 90,
-      [35, 36, 35, 34, 35, 36, 35, 36, 35, 35],
+      [28, 29, 28, 29, 28, 29, 28, 28, 29, 29],
       'Impacto vertical hacia abajo (+90°) sobre superficie superior afinada.',
       now - 86400000 * 2
     ),
     createMockTest(
       't-05', 'prj-bogota-01', 'M-CONT-01', 'Muro Estructural', 'Sótano 1 / Eje 1 Perimetral',
-      28, 4000, 21, 0,
-      [30, 31, 30, 29, 31, 30, 29, 30, 31, 30],
+      21, 3000, 21, 0,
+      [30, 31, 30, 31, 30, 31, 30, 30, 31, 30],
       'Lecturas en zona de desencofrado temprano. En seguimiento para verificación a los 28 días.',
       now - 86400000 * 1
     ),
@@ -223,22 +365,22 @@ function getInitialTests(): SclerometryTest[] {
     // Prj 2 Tests (Puente Río Magdalena)
     createMockTest(
       't-06', 'prj-girardot-02', 'PILOTE-P1', 'Pilote', 'Eje Central Pila 1 - Cabezal',
-      35, 5000, 56, 0,
-      [40, 41, 39, 41, 40, 40, 41, 39, 40, 40],
+      21, 3000, 56, 0,
+      [32, 32, 31, 32, 32, 33, 32, 31, 32, 32],
       'Excelente compactación en concreto estructural para cimentación profunda.',
       now - 86400000 * 8
     ),
     createMockTest(
       't-07', 'prj-girardot-02', 'ESTRIBO-OCC', 'Cimentación', 'Estribo Costado Occidental',
-      35, 5000, 45, 0,
-      [39, 40, 39, 41, 39, 40, 38, 40, 39, 40],
+      21, 3000, 45, 0,
+      [31, 31, 32, 31, 32, 31, 31, 32, 31, 31],
       'Prueba en cara vertical previa a colocación de apoyos elastoméricos.',
       now - 86400000 * 6
     ),
     createMockTest(
       't-08', 'prj-girardot-02', 'VIGA-POST-01', 'Viga', 'Viga Cajón 1 - Tramo Central',
-      35, 5000, 28, -90,
-      [36, 37, 36, 38, 36, 37, 36, 37, 36, 37],
+      21, 3000, 28, -90,
+      [36, 36, 35, 36, 37, 36, 36, 35, 36, 37],
       'Lectura vertical hacia arriba (-90°) en dovela postensada.',
       now - 86400000 * 4
     )

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Project, SclerometryTest } from '../types';
 import { CURVE_MODEL_DESCRIPTIONS } from '../utils/sclerometryNorms';
 import { generateSclerometryPDF } from '../utils/pdfGenerator';
-import { X, FileText, Download, Copy, Check, Printer, FileDown, CheckCircle2 } from 'lucide-react';
+import { generateLPSReportPDF } from '../utils/lpsPdfGenerator';
+import { generateLPSWordDocument } from '../utils/lpsDocGenerator';
+import { getLPSConfig } from '../utils/lpsConfig';
+import { X, FileText, Download, Copy, Check, Printer, FileDown, Award, FileCode } from 'lucide-react';
 
 interface ExportReportModalProps {
   isOpen: boolean;
@@ -19,7 +22,10 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [reportFormat, setReportFormat] = useState<'text' | 'csv'>('text');
+  const [isGeneratingLpsPdf, setIsGeneratingLpsPdf] = useState(false);
+  const [reportFormat, setReportFormat] = useState<'lps' | 'text' | 'csv'>('lps');
+
+  const lpsConfig = getLPSConfig();
 
   if (!isOpen) return null;
 
@@ -31,6 +37,107 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   const invalidCount = tests.filter(t => t.status === 'INVALIDO').length;
   const testsWithDesign = tests.filter(t => t.fcDesignMpa > 0);
   const compliancePct = testsWithDesign.length > 0 ? Math.round((passedCount / testsWithDesign.length) * 100) : (diagnosticCount > 0 ? 100 : 0);
+
+  const totalPsiSum = tests.reduce((acc, t) => acc + (t.estimatedFcPsi || 0), 0);
+  const avgPsi = tests.length > 0 ? (totalPsiSum / tests.length) : 0;
+
+  const handleExportLpsPDF = () => {
+    try {
+      setIsGeneratingLpsPdf(true);
+      generateLPSReportPDF(project, tests);
+    } catch (err) {
+      console.error('Error generating LPS PDF:', err);
+    } finally {
+      setIsGeneratingLpsPdf(false);
+    }
+  };
+
+  const handleExportLpsWordDoc = () => {
+    const docHtml = generateLPSWordDocument(project, tests);
+    const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Informe_LPS_Esclerometria_${project.code || 'PROYECTO'}_${new Date().toISOString().slice(0, 10)}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateLPSTextReport = (): string => {
+    const dateObj = new Date();
+    const monthsUpper = [
+      'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+      'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+    ];
+    const currentMonthYear = `${monthsUpper[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+
+    let txt = `ENSAYO ESCLEROMETRÍA\n\n\n\n\n\n\n`;
+    txt += `ENSAYO DE ESCLEROMETRÍA ${project.name.toUpperCase()}, ${project.location?.toUpperCase() || ''}, ${project.municipality.toUpperCase()}, COLOMBIA\n\n\n\n`;
+    txt += `${lpsConfig.companyName}\n`;
+    txt += `${lpsConfig.companySubtitle}\n\n\n\n`;
+    txt += `${lpsConfig.city}\n`;
+    txt += `        ${currentMonthYear}        \n\n\n\n`;
+    txt += `TABLA DE CONTENIDO \n\n\n`;
+    txt += `1. Tabla de contenido\n\n\n`;
+    txt += `2.        INTRODUCCIÓN        3\n`;
+    txt += `3.        OBJETIVO        3\n`;
+    txt += `4.        ALCANCE        3\n`;
+    txt += `5.        TÉRMINOS Y DEFINICIONES        3\n`;
+    txt += `6.        NORMAS DE REFERENCIA        3\n`;
+    txt += `7.        PROCEDIMIENTO        4\n`;
+    txt += `8.        EQUIPO UTILIZADO        4\n`;
+    txt += `9.        UBICACIÓN        5\n`;
+    txt += `10.        DATOS OBTENIDOS EN CAMPO.        6\n`;
+    txt += `11.        ANÁLISIS DE RESULTADOS        6\n`;
+    txt += `12.        ANEXO 2. DATOS DE CAMPO.        8\n`;
+    txt += `13.        ANEXO 3. CERTIFICADO DE CALIBRACIÓN.        9\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n`;
+    txt += `2. INTRODUCCIÓN\n`;
+    txt += `El presente informe está basado en la ejecución de los ensayos no destructivos al concreto, se ejecuta en ENSAYO DE ESCLEROMETRÍA PARA ${project.name.toUpperCase()}, ${project.location?.toUpperCase() || ''}, ${project.municipality.toUpperCase()}, COLOMBIA. Para evaluar su resistencia a compresión. Para estimar esta resistencia, el martillo de Schmidt o Esclerómetro se ha modificado convenientemente dando lugar a varios modelos. Su uso es muy frecuente dada la manejabilidad del aparato, pudiendo aplicarse sobre la zona a ensayar midiendo su resistencia al rebote. Para utilizar este método de ensayo para estimar la resistencia, es necesario establecer una relación entre la fuerza y el número de rebote para una mezcla de concreto y un aparato dado. La medida del rebótese correlaciona con la resistencia a compresión mediante un gráfico debido a Miller (1965) que contempla la densidad del elemento y la orientación del martillo respecto del plano ensayado.\n\n`;
+    txt += `3. OBJETIVO\n`;
+    txt += `Determinar la resistencia a compresión del hormigón ya sea en pilares, muros, vigas o algún elemento estructural elaborado en concreto.\n\n`;
+    txt += `4. ALCANCE\n`;
+    txt += `Determinar la resistencia del concreto existente, mediante una serie de repeticiones de golpes con el esclerómetro. Y así poder encontrar un valor por cada elemento estudiado.\n\n`;
+    txt += `5. TÉRMINOS Y DEFINICIONES\n\n`;
+    txt += `   * GOLPE: Un golpe es un impacto entre un cuerpo en movimiento y otro cuerpo, así como el efecto que produce.\n`;
+    txt += `   * HORMIGÓN: El hormigón o concreto es un material compuesto empleado en construcción, formado esencialmente por un aglomerante (en la mayoría de las ocasiones cemento (generalmente cemento Portland) al que se añade partículas o fragmentos de un agregado (áridos, como grava, gravilla y arena) agua (hidratación) y aditivos.\n`;
+    txt += `   * RESISTENCIA A COMPRESIÓN: La resistencia a la compresión simple es la característica mecánica principal del concreto. Se define como la capacidad para soportar una carga por unidad de área, y se expresa en términos de esfuerzo, generalmente en kg/cm2, MPa y con alguna frecuencia en libras por pulgada cuadrada (psi)\n\n`;
+    txt += `6. NORMAS DE REFERENCIA\n\n`;
+    txt += `   * ASTM C 805:1997: Standard test method for rebound number of hardened concretes\n`;
+    txt += `   * NTP 339.181:2001: HORMIGÓN (CONCRETO). Método de ensayo para                determinar El número de rebote del concreto endurecido esclerómetro.\n`;
+    txt += `   * MTC E 725 método de ensayo para determinar el número de rebote del concreto endurecido (esclerometría)\n\n`;
+    txt += `7. PROCEDIMIENTO\n\n`;
+    txt += `* Para la realización del ensayo se seleccionaron y prepara una zona de hormigón que cumpla con:\n`;
+    txt += `* Zona de ensayo de aproximadamente 15 x15 cm.\n`;
+    txt += `* Superficies lisas y sin recubrir (utilizar piedra abrasiva para eliminar impurezas en el concreto)\n`;
+    txt += `* Se procederá hacer por lo menos 10 lecturas con el esclerómetro porcada elemento estudiado\n`;
+    txt += `* La muestra debe contar con especificaciones mínimas para el ensayo:\n`;
+    txt += `* Espesor mínimo 100 mm(4pulg)\n`;
+    txt += `* Evitar las superficies de concreto que representan descascara miento alta porosidad.\n`;
+    txt += `* Evitar superficies con terminados (ACABADOS)\n`;
+    txt += `* El área de ensayo será de por lo menos 150 mm (6 pulgadas) de diámetro.\n`;
+    txt += `* Las superficies de textura excesivamente suave o con mortero suelto deberán ser pulidas con la piedra abrasiva (excepto superficie lisa).\n`;
+    txt += `* En superficies rugosas, contra placadas (tripley) secas y con presencia de carbonatación producen número de rebotes más altos.\n\n`;
+    txt += `8. EQUIPO UTILIZADO\n`;
+    txt += `   * Esclerómetro: El esclerómetro es un instrumento de medición analógico que sirve para determinar la resistencia del hormigón. Este esclerómetro usa el principio de medición Schmidt. En este principio de medición la energía cinética del esclerómetro impacta en el hormigón. El rebote resultante permite al esclerómetro determinar la resistencia del hormigón.\n`;
+    txt += `   * Piedra abrasiva: Esta constituida por granos de carburo de silicio de tamaño medio o de algún otro material y textura similar.\n\n`;
+    txt += `9. UBICACIÓN  \n\n`;
+    txt += `   * Vista general edificación.  \n\n\n\n`;
+    txt += `   10. DATOS OBTENIDOS EN CAMPO. \n`;
+    txt += `   * ${project.name.toUpperCase()}  \n`;
+    txt += `Promedios de resistencias encontradas, informe completo elementos estudiados individuales ver anexo (2).\n\n\n\n`;
+    txt += `   11. ANÁLISIS DE RESULTADOS \n`;
+    txt += `De los elementos estudiados se puede encontrar que la resistencia promedio es de ${avgPsi.toFixed(2)} Psi. \n\n\n\n`;
+    txt += `ELABORO: \n\n\n\n\n\n\n\n\n\n\n\n`;
+    txt += `--------------------------------------------------\n\n\n`;
+    txt += `________________\n`;
+    txt += `ANEXO 1. REGISTRO FOTOGRÁFICO \n\n\n\n\n\n`;
+    txt += `   12. ANEXO 2. DATOS DE CAMPO.\n\n\n\n`;
+    txt += `   13. ANEXO 3. CERTIFICADO DE CALIBRACIÓN.   \n\n\n\n\n\n`;
+    txt += `${lpsConfig.address}\n`;
+    txt += ` ${lpsConfig.phone}, Email: ${lpsConfig.email}\n`;
+
+    return txt;
+  };
 
   const generateTextReport = (): string => {
     const dateStr = new Date().toLocaleDateString('es-CO', {
@@ -82,7 +189,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     tests.forEach((t, i) => {
       sb += `[${i + 1}] Elemento: ${t.elementTag} (${t.elementType}) - ${t.levelAxis}\n`;
       if (t.fcDesignMpa > 0) {
-        sb += `    f'c Diseño:       ${t.fcDesignMpa} MPa (${t.fcDesignPsi} PSI) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
+        sb += `    f'c Diseño:       ${t.fcDesignPsi} PSI (${t.fcDesignMpa} MPa) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
       } else {
         sb += `    f'c Diseño:       Sin especificar (Evaluación Diagnóstica) | Edad: ${t.concreteAgeDays} días | Ángulo: ${t.impactAngle}°\n`;
       }
@@ -93,7 +200,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
         sb += `    Descartes NTC:    Ninguno (100% lecturas válidas dentro del rango)\n`;
       }
       sb += `    Estadística R:    R_crudo = ${t.meanRaw} | ΔR = ${t.correctionAngle} | R_corr = ${t.meanCorrected} | CV = ${t.cov}%\n`;
-      sb += `    f'c Estimado:     ${t.estimatedFcMpa} MPa (${t.estimatedFcPsi} PSI / ${t.estimatedFcKgcm2} kg/cm²)\n`;
+      sb += `    f'c Estimado:     ${t.estimatedFcPsi} PSI (${t.estimatedFcMpa} MPa / ${t.estimatedFcKgcm2} kg/cm²)\n`;
       if (t.fcDesignMpa > 0) {
         sb += `    Conformidad:      ${t.status} (${t.complianceRatio}% del f'c de diseño)\n`;
       } else {
@@ -140,14 +247,32 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     }
   };
 
+  const getCurrentContent = () => {
+    if (reportFormat === 'lps') return generateLPSTextReport();
+    if (reportFormat === 'text') return generateTextReport();
+    return generateCSV();
+  };
+
   const handleCopy = () => {
-    const content = reportFormat === 'text' ? generateTextReport() : generateCSV();
+    const content = getCurrentContent();
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleDownload = () => {
+    if (reportFormat === 'lps') {
+      const content = generateLPSTextReport();
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Formato_LPS_Editable_${project.code || 'PROYECTO'}_${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
     const isCsv = reportFormat === 'csv';
     const content = isCsv ? generateCSV() : generateTextReport();
     const mime = isCsv ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
@@ -166,7 +291,7 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    const content = generateTextReport().replace(/\n/g, '<br/>').replace(/ /g, '&nbsp;');
+    const content = getCurrentContent().replace(/\n/g, '<br/>').replace(/ /g, '&nbsp;');
     printWindow.document.write(`
       <html>
         <head>
@@ -189,17 +314,17 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-4xl text-slate-800 dark:text-slate-100 shadow-2xl overflow-hidden my-auto max-h-[95vh] flex flex-col transition-colors">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-50 via-white to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <div className="bg-gradient-to-r from-red-50 via-white to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-              <FileText className="h-5 w-5" />
+            <div className="p-2 rounded-xl bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
+              <Award className="h-5 w-5" />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                Informe Técnico Oficial NSR-10 / NTC 3692
+                Informe y Dossier LPS Ingeniería S.A.S.
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Certificado de evaluación no destructiva y exportación de datos de obra
+                Formato editable y exportación oficial de ensayo de esclerometría en concreto endurecido
               </p>
             </div>
           </div>
@@ -213,17 +338,28 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
 
         {/* Toolbar */}
         <div className="bg-slate-50 dark:bg-slate-950 px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-600 dark:text-slate-400 font-semibold">Formato:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-slate-600 dark:text-slate-400 font-semibold">Vista previa:</span>
+            <button
+              onClick={() => setReportFormat('lps')}
+              className={`px-3 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                reportFormat === 'lps'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Award className="h-3.5 w-3.5" />
+              <span>Dossier LPS (Editable)</span>
+            </button>
             <button
               onClick={() => setReportFormat('text')}
               className={`px-3 py-1 rounded-lg font-bold transition ${
                 reportFormat === 'text'
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? 'bg-brand-600 text-white shadow-sm'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
               }`}
             >
-              Informe Técnico (TXT / Imprimir)
+              Informe Estándar (TXT)
             </button>
             <button
               onClick={() => setReportFormat('csv')}
@@ -238,15 +374,37 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* LPS Engineering Dossier PDF Button */}
+            <button
+              onClick={handleExportLpsPDF}
+              disabled={isGeneratingLpsPdf}
+              className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-1.5 shadow-sm shadow-red-600/30 transition cursor-pointer"
+              title="Descargar Dossier Completo en Formato Oficial LPS INGENIERÍA S.A.S. (Portada, Tabla Contenido, Metodología, Ubicación, Matrices y Certificado)"
+            >
+              <Award className="h-4 w-4 text-amber-300" />
+              <span>{isGeneratingLpsPdf ? 'Generando LPS...' : 'Descargar LPS (PDF)'}</span>
+            </button>
+
+            {/* LPS Engineering Word DOC Button */}
+            <button
+              onClick={handleExportLpsWordDoc}
+              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5 shadow-sm shadow-blue-600/30 transition cursor-pointer"
+              title="Descargar Documento Editable LPS para Microsoft Word (.doc) con tablas, encabezados y estilos"
+            >
+              <FileCode className="h-4 w-4 text-white" />
+              <span>Descargar LPS (.DOC Word)</span>
+            </button>
+
             <button
               onClick={handleExportPDF}
               disabled={isGeneratingPdf}
-              className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer"
-              title="Descargar Informe Oficial en Formato PDF con membrete y firmas"
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+              title="Descargar Informe Técnico Estándar Compacto en PDF"
             >
-              <FileDown className="h-4 w-4" />
-              <span>{isGeneratingPdf ? 'Generando PDF...' : 'Generar Informe PDF'}</span>
+              <FileDown className="h-4 w-4 text-emerald-400" />
+              <span>{isGeneratingPdf ? 'Generando...' : 'PDF Estándar'}</span>
             </button>
+
             <button
               onClick={handlePrint}
               className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition shadow-sm"
@@ -263,10 +421,10 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
             </button>
             <button
               onClick={handleDownload}
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition"
+              className="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold flex items-center gap-1.5 shadow-md shadow-brand-600/30 transition"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Descargar {reportFormat.toUpperCase()}</span>
+              <span>Descargar Texto</span>
             </button>
           </div>
         </div>
@@ -274,22 +432,30 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
         {/* Content Viewer */}
         <div className="p-4 overflow-y-auto grow bg-slate-100 dark:bg-slate-950">
           <pre className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-300 font-mono text-[11px] sm:text-xs whitespace-pre-wrap select-all leading-relaxed shadow-sm">
-            {reportFormat === 'text' ? generateTextReport() : generateCSV()}
+            {getCurrentContent()}
           </pre>
         </div>
 
         {/* Footer */}
-        <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shrink-0">
+        <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shrink-0 flex-wrap gap-2">
           <span className="text-slate-500 dark:text-slate-400">
-            {testsCount} elementos incluidos • {compliancePct}% índice de conformidad
+            {testsCount} elementos incluidos • Resistencia promedio estimada: <b>{avgPsi.toFixed(2)} PSI</b> ({avgMpa.toFixed(1)} MPa)
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleExportPDF}
-              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center gap-1.5 shadow-sm transition"
+              onClick={handleExportLpsWordDoc}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+            >
+              <FileCode className="h-3.5 w-3.5" />
+              <span>Word LPS (.DOC)</span>
+            </button>
+            <button
+              onClick={handleExportLpsPDF}
+              disabled={isGeneratingLpsPdf}
+              className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
               <FileDown className="h-3.5 w-3.5" />
-              <span>Descargar PDF</span>
+              <span>{isGeneratingLpsPdf ? 'Generando...' : 'PDF Oficial LPS'}</span>
             </button>
             <button
               onClick={onClose}
@@ -304,3 +470,4 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
     </div>
   );
 };
+

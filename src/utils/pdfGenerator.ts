@@ -169,7 +169,7 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
   y += 3;
 
   const tableHead = [
-    ['#', 'Elemento / Tipo', 'Nivel / Eje', "f'c Dis.\n(MPa)", 'Ángulo', 'R Crudo', 'ΔR', 'R Corr.', "f'c Est.\n(MPa)", "f'c Est.\n(PSI)", '% Cumpl.', 'Estado NTC']
+    ['#', 'Elemento / Tipo', 'Nivel / Eje', "f'c Dis.\n(PSI)", 'Ángulo', 'R Crudo', 'ΔR', 'R Corr.', "f'c Est.\n(PSI)", "f'c Est.\n(MPa)", '% Cumpl.', 'Estado NTC']
   ];
 
   const tableBody = tests.map((t, index) => {
@@ -184,7 +184,7 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
       : t.impactAngle === -45
       ? '-45° (Abajo)'
       : `${t.impactAngle > 0 ? `+${t.impactAngle}` : t.impactAngle}°`;
-    const fcDesignText = t.fcDesignMpa > 0 ? `${t.fcDesignMpa}` : 'N/A';
+    const fcDesignText = t.fcDesignPsi > 0 ? `${t.fcDesignPsi}` : (t.fcDesignMpa > 0 ? `${t.fcDesignMpa}` : 'N/A');
     const complianceText = t.fcDesignMpa > 0 ? `${t.complianceRatio}%` : 'N/A';
     const statusText = t.status === 'DIAGNOSTICO' ? 'DIAGNÓSTICO' : t.status;
 
@@ -197,8 +197,8 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
       `${t.meanRaw}`,
       t.correctionAngle >= 0 ? `+${t.correctionAngle}` : `${t.correctionAngle}`,
       `${t.meanCorrected}`,
-      `${t.estimatedFcMpa}`,
       `${t.estimatedFcPsi}`,
+      `${t.estimatedFcMpa}`,
       complianceText,
       statusText
     ];

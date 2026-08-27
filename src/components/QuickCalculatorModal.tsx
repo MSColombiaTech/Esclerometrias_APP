@@ -33,7 +33,7 @@ export const QuickCalculatorModal: React.FC<QuickCalculatorModalProps> = ({
 }) => {
   const [impactAngle, setImpactAngle] = useState<ImpactAngle>(0);
   const [curveModel, setCurveModel] = useState<CurveModel>('SCHMIDT_N_DIRECT');
-  const [readings, setReadings] = useState<number[]>(() => generateRealisticReadingsForTargetFc(30.00, 32.99, 0, 'SCHMIDT_N_DIRECT'));
+  const [readings, setReadings] = useState<number[]>(() => generateRealisticReadingsForTargetFc(26.0, 33.0, 0, 'SCHMIDT_N_DIRECT'));
   const [fcDesignMpa, setFcDesignMpa] = useState<number>(28);
 
   if (!isOpen) return null;
@@ -48,7 +48,9 @@ export const QuickCalculatorModal: React.FC<QuickCalculatorModalProps> = ({
   };
 
   const handleReset = () => {
-    setReadings(generateRealisticReadingsForTargetFc(30.00, 32.99, impactAngle, curveModel));
+    const minT = fcDesignMpa > 0 ? fcDesignMpa * 0.93 : 22.0;
+    const maxT = fcDesignMpa > 0 ? fcDesignMpa * 1.15 : 38.0;
+    setReadings(generateRealisticReadingsForTargetFc(minT, maxT, impactAngle, curveModel));
   };
 
   const angleOptions: { angle: ImpactAngle; label: string; icon: string }[] = [
@@ -266,8 +268,8 @@ export const QuickCalculatorModal: React.FC<QuickCalculatorModalProps> = ({
 
               <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
                 <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">f'c Estimado</p>
-                <p className="text-lg font-mono font-bold text-amber-600 dark:text-amber-400">{evaluation.estimatedFcMpa} MPa</p>
-                <p className="text-[9px] text-slate-600 dark:text-slate-400 font-mono">{evaluation.estimatedFcPsi} PSI</p>
+                <p className="text-lg font-mono font-bold text-amber-600 dark:text-amber-400">{(evaluation.estimatedFcPsi ?? 0).toLocaleString()} PSI</p>
+                <p className="text-[9px] text-slate-600 dark:text-slate-400 font-mono">{evaluation.estimatedFcMpa ?? 0} MPa • {evaluation.estimatedFcKgcm2 ?? 0} kg/cm²</p>
               </div>
 
               <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">

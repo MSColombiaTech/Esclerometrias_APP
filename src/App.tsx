@@ -10,6 +10,15 @@ import {
   exportBackupJSON,
   importBackupJSON
 } from './utils/storage';
+import { useAuth } from './context/AuthContext';
+import { 
+  fetchProjectsFromCloud, 
+  saveProjectToCloud, 
+  deleteProjectFromCloud, 
+  fetchTestsFromCloud, 
+  saveTestToCloud, 
+  deleteTestFromCloud 
+} from './utils/cloudSync';
 import { CurveViewer } from './components/CurveViewer';
 import { TestFormModal } from './components/TestFormModal';
 import { QuickCalculatorModal } from './components/QuickCalculatorModal';
@@ -19,6 +28,8 @@ import { NormInfoModal } from './components/NormInfoModal';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useTheme } from './context/ThemeContext';
 import { generateSclerometryPDF } from './utils/pdfGenerator';
+import { generateLPSReportPDF } from './utils/lpsPdfGenerator';
+import { generateLPSWordDocument } from './utils/lpsDocGenerator';
 import { 
   Building2, 
   Layers, 
@@ -47,15 +58,24 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   FileDown,
-  Info
+  FileCode,
+  Info,
+  Award,
+  Cloud,
+  UserCheck,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 
 export function App() {
   const { isDark } = useTheme();
+  const { user, token, signInWithGoogle, signOut, loading: authLoading } = useAuth();
+
   // State
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveId] = useState<string | null>(null);
   const [tests, setTests] = useState<SclerometryTest[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<'tests' | 'curves' | 'report'>('tests');
@@ -89,7 +109,59 @@ export function App() {
     setActiveId(currentActiveId);
   }, []);
 
-  // Sync projects and tests to storage
+  // Sync with Cloud SQL when authenticated
+  useEffect(() => {
+    if (!token) return;
+
+    let isSubscribed = true;
+    const performCloudSync = async () => {
+      setIsSyncing(true);
+      try {
+        const cloudProjects = await fetchProjectsFromCloud(token);
+        const cloudTests = await fetchTestsFromCloud(token);
+
+        if (!isSubscribed) return;
+
+        if (cloudProjects && cloudProjects.length > 0) {
+          setProjects(cloudProjects);
+          saveProjects(cloudProjects);
+          if (!activeProjectId || !cloudProjects.some(p => p.id === activeProjectId)) {
+            setActiveId(cloudProjects[0].id);
+            setActiveProjectId(cloudProjects[0].id);
+          }
+        } else {
+          // If cloud has no projects yet, seed initial projects to Cloud SQL
+          const currentLocal = getStoredProjects();
+          for (const prj of currentLocal) {
+            await saveProjectToCloud(prj, token);
+          }
+        }
+
+        if (cloudTests && cloudTests.length > 0) {
+          setTests(cloudTests);
+          saveTests(cloudTests);
+        } else {
+          // Seed local tests to Cloud SQL
+          const currentLocalTests = getStoredTests();
+          for (const t of currentLocalTests) {
+            await saveTestToCloud(t, token);
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud sync background notice:', err);
+      } finally {
+        if (isSubscribed) setIsSyncing(false);
+      }
+    };
+
+    performCloudSync();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [token]);
+
+  // Sync projects and tests to storage and Cloud SQL
   const handleSaveProjects = (newProjects: Project[]) => {
     setProjects(newProjects);
     saveProjects(newProjects);
@@ -127,7 +199,7 @@ export function App() {
     }).sort((a, b) => {
       if (sortBy === 'date') return b.createdAt - a.createdAt;
       if (sortBy === 'element') return a.elementTag.localeCompare(b.elementTag);
-      if (sortBy === 'fc') return b.estimatedFcMpa - a.estimatedFcMpa;
+      if (sortBy === 'fc') return b.estimatedFcPsi - a.estimatedFcPsi;
       if (sortBy === 'rebound') return b.meanCorrected - a.meanCorrected;
       return 0;
     });
@@ -137,14 +209,14 @@ export function App() {
   const stats = useMemo(() => {
     const total = activeProjectTests.length;
     if (total === 0) {
-      return { total: 0, cumple: 0, dudoso: 0, noCumple: 0, diagnostico: 0, invalido: 0, compliancePct: 0, avgR: 0, avgFc: 0 };
+      return { total: 0, cumple: 0, dudoso: 0, noCumple: 0, diagnostico: 0, invalido: 0, compliancePct: 0, avgR: 0, avgFc: 0, avgFcPsi: 0 };
     }
     const cumple = activeProjectTests.filter(t => t.status === 'CUMPLE').length;
     const dudoso = activeProjectTests.filter(t => t.status === 'DUDOSO').length;
     const noCumple = activeProjectTests.filter(t => t.status === 'NO_CUMPLE').length;
     const diagnostico = activeProjectTests.filter(t => t.status === 'DIAGNOSTICO').length;
     const invalido = activeProjectTests.filter(t => t.status === 'INVALIDO').length;
-    const testsWithDesign = activeProjectTests.filter(t => t.fcDesignMpa > 0);
+    const testsWithDesign = activeProjectTests.filter(t => t.fcDesignMpa > 0 || (t.fcDesignPsi && t.fcDesignPsi > 0));
     const compliancePct = testsWithDesign.length > 0 ? Math.round((cumple / testsWithDesign.length) * 100) : 100;
 
     const validTests = activeProjectTests.filter(t => t.status !== 'INVALIDO' && t.meanCorrected > 0);
@@ -154,8 +226,11 @@ export function App() {
     const avgFc = validTests.length > 0 
       ? Number((validTests.reduce((acc, t) => acc + t.estimatedFcMpa, 0) / validTests.length).toFixed(1)) 
       : 0;
+    const avgFcPsi = validTests.length > 0
+      ? Math.round(validTests.reduce((acc, t) => acc + (t.estimatedFcPsi || 0), 0) / validTests.length)
+      : 0;
 
-    return { total, cumple, dudoso, noCumple, diagnostico, invalido, compliancePct, avgR, avgFc };
+    return { total, cumple, dudoso, noCumple, diagnostico, invalido, compliancePct, avgR, avgFc, avgFcPsi };
   }, [activeProjectTests]);
 
   // Handlers for Project CRUD
@@ -164,7 +239,7 @@ export function App() {
     setActiveProjectId(id);
   };
 
-  const handleSaveProjectModal = (prj: Project) => {
+  const handleSaveProjectModal = async (prj: Project) => {
     const exists = projects.some(p => p.id === prj.id);
     let updated: Project[];
     if (exists) {
@@ -175,9 +250,13 @@ export function App() {
     handleSaveProjects(updated);
     setActiveId(prj.id);
     setActiveProjectId(prj.id);
+
+    if (token) {
+      await saveProjectToCloud(prj, token);
+    }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (projects.length <= 1) {
       alert('Debe existir al menos un proyecto en el sistema.');
       return;
@@ -190,11 +269,15 @@ export function App() {
       const nextId = updatedProjects[0]?.id || null;
       setActiveId(nextId);
       if (nextId) setActiveProjectId(nextId);
+
+      if (token) {
+        await deleteProjectFromCloud(id, token);
+      }
     }
   };
 
   // Handlers for Test CRUD
-  const handleSaveTestModal = (testRecord: SclerometryTest) => {
+  const handleSaveTestModal = async (testRecord: SclerometryTest) => {
     const exists = tests.some(t => t.id === testRecord.id);
     let updated: SclerometryTest[];
     if (exists) {
@@ -203,16 +286,24 @@ export function App() {
       updated = [testRecord, ...tests];
     }
     handleSaveTests(updated);
-  };
 
-  const handleDeleteTest = (id: string) => {
-    if (confirm('¿Deseas eliminar este registro de ensayo?')) {
-      const updated = tests.filter(t => t.id !== id);
-      handleSaveTests(updated);
+    if (token) {
+      await saveTestToCloud(testRecord, token);
     }
   };
 
-  const handleDuplicateTest = (testToDup: SclerometryTest) => {
+  const handleDeleteTest = async (id: string) => {
+    if (confirm('¿Deseas eliminar este registro de ensayo?')) {
+      const updated = tests.filter(t => t.id !== id);
+      handleSaveTests(updated);
+
+      if (token) {
+        await deleteTestFromCloud(id, token);
+      }
+    }
+  };
+
+  const handleDuplicateTest = async (testToDup: SclerometryTest) => {
     const now = Date.now();
     const newTest: SclerometryTest = {
       ...testToDup,
@@ -222,6 +313,10 @@ export function App() {
       updatedAt: now
     };
     handleSaveTests([newTest, ...tests]);
+
+    if (token) {
+      await saveTestToCloud(newTest, token);
+    }
   };
 
   // Handle Quick Calculator Send to Project
@@ -307,26 +402,62 @@ export function App() {
               {/* Official Technical Report PDF & TXT Buttons */}
               {activeProject && (
                 <>
+                  {/* Original Technical Report PDF */}
                   <button
                     onClick={() => {
                       if (activeProject) {
                         generateSclerometryPDF(activeProject, activeProjectTests);
                       }
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
-                    title="Generar y descargar informe oficial en formato PDF (NSR-10 / NTC 3692)"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                    title="Descargar Informe Técnico Original Compacto (NTC 3692 / NSR-10)"
                   >
-                    <FileDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                    <span>Descargar PDF</span>
+                    <FileDown className="h-4 w-4 text-emerald-400" />
+                    <span>PDF Original</span>
+                  </button>
+
+                  {/* LPS Official Dossier PDF */}
+                  <button
+                    onClick={() => {
+                      if (activeProject) {
+                        generateLPSReportPDF(activeProject, activeProjectTests);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm shadow-red-600/30 cursor-pointer"
+                    title="Descargar Dossier Oficial Completo LPS INGENIERÍA S.A.S. en PDF"
+                  >
+                    <Award className="h-4 w-4 text-amber-300" />
+                    <span>Dossier LPS (PDF)</span>
+                  </button>
+
+                  {/* LPS Word DOC */}
+                  <button
+                    onClick={() => {
+                      if (activeProject) {
+                        const docHtml = generateLPSWordDocument(activeProject, activeProjectTests);
+                        const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Informe_LPS_Esclerometria_${activeProject.code || 'PROYECTO'}_${new Date().toISOString().slice(0, 10)}.doc`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm shadow-blue-600/30 cursor-pointer"
+                    title="Descargar Documento Editable LPS para Microsoft Word (.doc)"
+                  >
+                    <FileCode className="h-4 w-4 text-white" />
+                    <span>Word LPS (.DOC)</span>
                   </button>
 
                   <button
                     onClick={() => setIsExportReportOpen(true)}
                     className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                    title="Ver opciones de exportación (PDF, Excel CSV, Texto oficial)"
+                    title="Centro de Informes: Dossier LPS editable, Informe Original, Excel CSV y Formatos"
                   >
                     <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Informe / Excel</span>
+                    <span>Centro de Informes</span>
                   </button>
                 </>
               )}
@@ -346,8 +477,45 @@ export function App() {
                 </label>
               </div>
 
-            </div>
+              {/* Cloud SQL Google Auth Button / Account Badge */}
+              {user ? (
+                <div className="flex items-center gap-2 bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-2.5 py-1">
+                  <div className="flex items-center gap-1.5">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt={user.displayName || 'Usuario'} className="h-5 w-5 rounded-full border border-emerald-400" />
+                    ) : (
+                      <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    )}
+                    <div className="text-left hidden sm:block">
+                      <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200 leading-tight truncate max-w-[120px]">
+                        {user.displayName || user.email?.split('@')[0]}
+                      </p>
+                      <p className="text-[9px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                        <Cloud className="h-2.5 w-2.5" />
+                        {isSyncing ? 'Sincronizando...' : 'Cloud SQL'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => signOut()}
+                    className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-500/10 transition text-xs"
+                    title="Cerrar sesión de Cloud SQL"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => signInWithGoogle()}
+                  className="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  title="Conectar con Google para sincronización persistente en Google Cloud SQL"
+                >
+                  <Cloud className="h-3.5 w-3.5" />
+                  <span>Conectar Cloud SQL</span>
+                </button>
+              )}
 
+            </div>
           </div>
         </div>
       </header>
@@ -450,7 +618,8 @@ export function App() {
 
               <div className="px-2 py-1 border-l border-slate-200 dark:border-slate-800">
                 <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">f'c Promedio</p>
-                <p className="text-lg font-black font-mono text-sky-600 dark:text-sky-400">{stats.avgFc} <span className="text-[10px] font-normal">MPa</span></p>
+                <p className="text-lg font-black font-mono text-sky-600 dark:text-sky-400">{(stats.avgFcPsi ?? 0).toLocaleString()} <span className="text-[10px] font-normal">PSI</span></p>
+                <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">{stats.avgFc ?? 0} MPa</p>
               </div>
             </div>
 
@@ -649,7 +818,7 @@ export function App() {
                             <Compass className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                             Ángulo: <strong className="text-slate-800 dark:text-slate-200">{test.impactAngle}°</strong>
                           </span>
-                          {test.fcDesignMpa > 0 && (
+                          {(test.fcDesignMpa > 0 || test.fcDesignPsi > 0) && (
                             <>
                               <span>•</span>
                               <span>Edad: <strong className="text-slate-800 dark:text-slate-200">{test.concreteAgeDays}d</strong></span>
@@ -657,7 +826,7 @@ export function App() {
                           )}
                           <span>•</span>
                           <span>
-                            f'c Diseño: <strong className="text-slate-800 dark:text-slate-200">{test.fcDesignMpa > 0 ? `${test.fcDesignMpa} MPa` : 'Sin f\'c (Diagnóstico)'}</strong>
+                            f'c Diseño: <strong className="text-slate-800 dark:text-slate-200">{test.fcDesignPsi > 0 ? `${test.fcDesignPsi} PSI` : (test.fcDesignMpa > 0 ? `${test.fcDesignMpa} MPa` : 'Sin f\'c (Diagnóstico)')}</strong>
                           </span>
                         </div>
                       </div>
@@ -672,15 +841,15 @@ export function App() {
 
                         <div>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">f'c Estimado</p>
-                          <p className="text-base font-black font-mono text-amber-600 dark:text-amber-400">{test.estimatedFcMpa} <span className="text-[10px] font-normal">MPa</span></p>
-                          <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">{test.estimatedFcPsi} PSI</p>
+                          <p className="text-base font-black font-mono text-amber-600 dark:text-amber-400">{(test.estimatedFcPsi ?? 0).toLocaleString()} <span className="text-[10px] font-normal">PSI</span></p>
+                          <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">{test.estimatedFcMpa ?? 0} MPa • {test.estimatedFcKgcm2 ?? 0} kg/cm²</p>
                         </div>
 
                         <div>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">
-                            {test.fcDesignMpa > 0 ? "% Diseño" : "Modo"}
+                            {(test.fcDesignMpa > 0 || test.fcDesignPsi > 0) ? "% Diseño" : "Modo"}
                           </p>
-                          {test.fcDesignMpa > 0 ? (
+                          {(test.fcDesignMpa > 0 || test.fcDesignPsi > 0) ? (
                             <p className={`text-base font-black font-mono ${
                               test.complianceRatio >= 95 ? 'text-emerald-600 dark:text-emerald-400' :
                               test.complianceRatio >= 80 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
@@ -755,13 +924,13 @@ export function App() {
                           <button
                             onClick={() => {
                               if (activeProject) {
-                                generateSclerometryPDF(activeProject, [test]);
+                                generateLPSReportPDF(activeProject, [test]);
                               }
                             }}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 transition"
-                            title="Generar Certificado PDF de este ensayo"
+                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 transition"
+                            title="Descargar Informe Oficial LPS (PDF) de este elemento"
                           >
-                            <FileDown className="h-4 w-4" />
+                            <Award className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDuplicateTest(test)}

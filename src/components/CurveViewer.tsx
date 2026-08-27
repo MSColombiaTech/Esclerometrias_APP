@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { SclerometryTest, CurveModel, ElementType } from '../types';
+import { 
+  getStoredChartConfig, 
+  saveStoredChartConfig, 
+  syncChartConfigToCloud, 
+  fetchChartConfigFromCloud, 
+  DEFAULT_CHART_CONFIG,
+  ChartConfigState
+} from '../utils/chartStorage';
 import { 
   generateCurveDataPoints, 
   calculateFcFromRebound,
@@ -37,7 +46,9 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
-  Tag
+  Tag,
+  Cloud,
+  Check
 } from 'lucide-react';
 
 export interface CustomDataPoint {
@@ -63,55 +74,165 @@ export const CurveViewer: React.FC<CurveViewerProps> = ({
   onSelectTest
 }) => {
   const { theme } = useTheme();
+  const { token, user } = useAuth();
   const isDark = theme === 'dark';
 
+  // Load initial persistent configuration
+  const initialConfig = useRef(getStoredChartConfig()).current;
+
   // Units
-  const [unit, setUnit] = useState<'MPa' | 'PSI'>('MPa');
+  const [unit, setUnit] = useState<'MPa' | 'PSI'>(initialConfig.unit);
 
   // Curve Visibility Toggles (Agregar / Quitar Curvas)
-  const [showSchmidtDirect, setShowSchmidtDirect] = useState(true);
-  const [showProceqStandard, setShowProceqStandard] = useState(false);
-  const [showProceqCube, setShowProceqCube] = useState(false);
-  const [showNsr10Comparison, setShowNsr10Comparison] = useState(true);
-  const [showAstmComparison, setShowAstmComparison] = useState(false);
-  const [showCustomCurve, setShowCustomCurve] = useState(false);
-  const [customCurveParams, setCustomCurveParams] = useState({ a: 0.04, b: 2.05 });
+  const [showSchmidtDirect, setShowSchmidtDirect] = useState(initialConfig.showSchmidtDirect);
+  const [showProceqStandard, setShowProceqStandard] = useState(initialConfig.showProceqStandard);
+  const [showProceqCube, setShowProceqCube] = useState(initialConfig.showProceqCube);
+  const [showNsr10Comparison, setShowNsr10Comparison] = useState(initialConfig.showNsr10Comparison);
+  const [showAstmComparison, setShowAstmComparison] = useState(initialConfig.showAstmComparison);
+  const [showCustomCurve, setShowCustomCurve] = useState(initialConfig.showCustomCurve);
+  const [customCurveParams, setCustomCurveParams] = useState(initialConfig.customCurveParams);
 
   // Reference Lines (Design Strengths)
-  const [showRef21, setShowRef21] = useState(true);
-  const [showRef28, setShowRef28] = useState(true);
-  const [showRef35, setShowRef35] = useState(false);
-  const [customRefMpa, setCustomRefMpa] = useState<number | ''>('');
-  const [showCustomRef, setShowCustomRef] = useState(false);
+  const [showRef21, setShowRef21] = useState(initialConfig.showRef21);
+  const [showRef28, setShowRef28] = useState(initialConfig.showRef28);
+  const [showRef35, setShowRef35] = useState(initialConfig.showRef35);
+  const [customRefMpa, setCustomRefMpa] = useState<number | ''>(initialConfig.customRefMpa);
+  const [showCustomRef, setShowCustomRef] = useState(initialConfig.showCustomRef);
 
   // Test Points Filtering & Visibility (Agregar / Quitar Ensayos Reales)
-  const [showProjectTests, setShowProjectTests] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CUMPLE' | 'DUDOSO' | 'NO_CUMPLE'>('ALL');
-  const [elementTypeFilter, setElementTypeFilter] = useState<string>('ALL');
-  const [excludedTestIds, setExcludedTestIds] = useState<Set<string>>(new Set());
+  const [showProjectTests, setShowProjectTests] = useState(initialConfig.showProjectTests);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CUMPLE' | 'DUDOSO' | 'NO_CUMPLE'>(initialConfig.statusFilter);
+  const [elementTypeFilter, setElementTypeFilter] = useState<string>(initialConfig.elementTypeFilter);
+  const [excludedTestIds, setExcludedTestIds] = useState<Set<string>>(new Set(initialConfig.excludedTestIds));
 
   // Custom User Data Points (Puntos manuales agregados)
-  const [customPoints, setCustomPoints] = useState<CustomDataPoint[]>([
-    {
-      id: 'cp-01',
-      label: 'Núcleo Diamantado Eje 2 (Calibración NTC 3658)',
-      rebound: 34,
-      fcValue: 27.5,
-      unit: 'MPa',
-      status: 'NUCLEO',
-      visible: true,
-      notes: 'Probeta testigo ensayada en prensa calibrada'
-    }
-  ]);
+  const [customPoints, setCustomPoints] = useState<CustomDataPoint[]>(initialConfig.customPoints);
+
+  // UI state
+  const [showDataControls, setShowDataControls] = useState(initialConfig.showDataControls);
+  const [activeControlTab, setActiveControlTab] = useState<'curves' | 'projectTests' | 'customPoints' | 'references'>(initialConfig.activeControlTab);
+  const [showAddPointForm, setShowAddPointForm] = useState(false);
+  const [cloudSynced, setCloudSynced] = useState(false);
 
   // Form for adding new custom data point
   const [newPointLabel, setNewPointLabel] = useState('');
   const [newPointRebound, setNewPointRebound] = useState<number | ''>(32);
   const [newPointFc, setNewPointFc] = useState<number | ''>(24.5);
   const [newPointStatus, setNewPointStatus] = useState<'CUMPLE' | 'DUDOSO' | 'NO_CUMPLE' | 'NUCLEO'>('CUMPLE');
-  const [showAddPointForm, setShowAddPointForm] = useState(false);
-  const [showDataControls, setShowDataControls] = useState(true);
-  const [activeControlTab, setActiveControlTab] = useState<'curves' | 'projectTests' | 'customPoints' | 'references'>('curves');
+
+  // Fetch Cloud SQL settings on auth
+  useEffect(() => {
+    if (!token) return;
+    let isMounted = true;
+    fetchChartConfigFromCloud(token).then((cloudConfig) => {
+      if (!isMounted || !cloudConfig) return;
+      setUnit(cloudConfig.unit);
+      setShowSchmidtDirect(cloudConfig.showSchmidtDirect);
+      setShowProceqStandard(cloudConfig.showProceqStandard);
+      setShowProceqCube(cloudConfig.showProceqCube);
+      setShowNsr10Comparison(cloudConfig.showNsr10Comparison);
+      setShowAstmComparison(cloudConfig.showAstmComparison);
+      setShowCustomCurve(cloudConfig.showCustomCurve);
+      if (cloudConfig.customCurveParams) setCustomCurveParams(cloudConfig.customCurveParams);
+      setShowRef21(cloudConfig.showRef21);
+      setShowRef28(cloudConfig.showRef28);
+      setShowRef35(cloudConfig.showRef35);
+      setCustomRefMpa(cloudConfig.customRefMpa ?? '');
+      setShowCustomRef(cloudConfig.showCustomRef);
+      setShowProjectTests(cloudConfig.showProjectTests);
+      setStatusFilter(cloudConfig.statusFilter);
+      setElementTypeFilter(cloudConfig.elementTypeFilter);
+      if (Array.isArray(cloudConfig.excludedTestIds)) setExcludedTestIds(new Set(cloudConfig.excludedTestIds));
+      if (Array.isArray(cloudConfig.customPoints)) setCustomPoints(cloudConfig.customPoints);
+      setShowDataControls(cloudConfig.showDataControls);
+      setActiveControlTab(cloudConfig.activeControlTab);
+      setCloudSynced(true);
+    });
+    return () => { isMounted = false; };
+  }, [token]);
+
+  // Persist current chart configuration whenever anything changes
+  useEffect(() => {
+    const currentConfig: ChartConfigState = {
+      unit,
+      showSchmidtDirect,
+      showProceqStandard,
+      showProceqCube,
+      showNsr10Comparison,
+      showAstmComparison,
+      showCustomCurve,
+      customCurveParams,
+      showRef21,
+      showRef28,
+      showRef35,
+      customRefMpa,
+      showCustomRef,
+      showProjectTests,
+      statusFilter,
+      elementTypeFilter,
+      excludedTestIds: Array.from(excludedTestIds),
+      customPoints,
+      showDataControls,
+      activeControlTab
+    };
+
+    saveStoredChartConfig(currentConfig);
+
+    if (token) {
+      const debounceTimer = setTimeout(() => {
+        syncChartConfigToCloud(currentConfig, token).then((ok) => {
+          if (ok) setCloudSynced(true);
+        });
+      }, 600);
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [
+    unit,
+    showSchmidtDirect,
+    showProceqStandard,
+    showProceqCube,
+    showNsr10Comparison,
+    showAstmComparison,
+    showCustomCurve,
+    customCurveParams,
+    showRef21,
+    showRef28,
+    showRef35,
+    customRefMpa,
+    showCustomRef,
+    showProjectTests,
+    statusFilter,
+    elementTypeFilter,
+    excludedTestIds,
+    customPoints,
+    showDataControls,
+    activeControlTab,
+    token
+  ]);
+
+  // Reset to default
+  const handleResetDefaults = () => {
+    if (confirm('¿Restablecer la configuración y curvas del gráfico a los valores predeterminados de fábrica?')) {
+      setUnit(DEFAULT_CHART_CONFIG.unit);
+      setShowSchmidtDirect(DEFAULT_CHART_CONFIG.showSchmidtDirect);
+      setShowProceqStandard(DEFAULT_CHART_CONFIG.showProceqStandard);
+      setShowProceqCube(DEFAULT_CHART_CONFIG.showProceqCube);
+      setShowNsr10Comparison(DEFAULT_CHART_CONFIG.showNsr10Comparison);
+      setShowAstmComparison(DEFAULT_CHART_CONFIG.showAstmComparison);
+      setShowCustomCurve(DEFAULT_CHART_CONFIG.showCustomCurve);
+      setCustomCurveParams(DEFAULT_CHART_CONFIG.customCurveParams);
+      setShowRef21(DEFAULT_CHART_CONFIG.showRef21);
+      setShowRef28(DEFAULT_CHART_CONFIG.showRef28);
+      setShowRef35(DEFAULT_CHART_CONFIG.showRef35);
+      setCustomRefMpa(DEFAULT_CHART_CONFIG.customRefMpa);
+      setShowCustomRef(DEFAULT_CHART_CONFIG.showCustomRef);
+      setShowProjectTests(DEFAULT_CHART_CONFIG.showProjectTests);
+      setStatusFilter(DEFAULT_CHART_CONFIG.statusFilter);
+      setElementTypeFilter(DEFAULT_CHART_CONFIG.elementTypeFilter);
+      setExcludedTestIds(new Set(DEFAULT_CHART_CONFIG.excludedTestIds));
+      setCustomPoints(DEFAULT_CHART_CONFIG.customPoints);
+    }
+  };
 
   // Handle adding a new data point
   const handleAddCustomPoint = (e: React.FormEvent) => {
@@ -332,6 +453,28 @@ export const CurveViewer: React.FC<CurveViewerProps> = ({
               PSI
             </button>
           </div>
+
+          {/* Cloud Sync Status Badge */}
+          {user ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <Cloud className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+              <span>Guardado en Cloud SQL</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+              <Check className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+              <span>Guardado automático</span>
+            </div>
+          )}
+
+          {/* Reset Defaults Button */}
+          <button
+            onClick={handleResetDefaults}
+            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition"
+            title="Restablecer valores y curvas predeterminadas"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
 
           {/* Quick Toggle Panel Button */}
           <button
