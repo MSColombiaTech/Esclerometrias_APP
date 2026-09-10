@@ -165,7 +165,7 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...primaryColor);
-  doc.text('3. RESULTADOS DETALLADOS DE ENSAYOS DE ESCLEROMETRÍA', margin, y);
+  doc.text('3. RESUMEN DE RESULTADOS DE ESCLEROMETRÍA (NTC 3692)', margin, y);
   y += 3;
 
   const tableHead = [
@@ -184,8 +184,8 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
       : t.impactAngle === -45
       ? '-45° (Abajo)'
       : `${t.impactAngle > 0 ? `+${t.impactAngle}` : t.impactAngle}°`;
-    const fcDesignText = t.fcDesignPsi > 0 ? `${t.fcDesignPsi}` : (t.fcDesignMpa > 0 ? `${t.fcDesignMpa}` : 'N/A');
-    const complianceText = t.fcDesignMpa > 0 ? `${t.complianceRatio}%` : 'N/A';
+    const fcDesignText = (t.fcDesignPsi && t.fcDesignPsi > 0) ? `${t.fcDesignPsi}` : (t.fcDesignMpa > 0 ? `${Math.round(t.fcDesignMpa * 145.038)}` : 'N/A');
+    const complianceText = (t.fcDesignMpa > 0 || (t.fcDesignPsi && t.fcDesignPsi > 0)) ? `${t.complianceRatio}%` : 'N/A';
     const statusText = t.status === 'DIAGNOSTICO' ? 'DIAGNÓSTICO' : t.status;
 
     return [
@@ -197,7 +197,7 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
       `${t.meanRaw}`,
       t.correctionAngle >= 0 ? `+${t.correctionAngle}` : `${t.correctionAngle}`,
       `${t.meanCorrected}`,
-      `${t.estimatedFcPsi}`,
+      `${t.estimatedFcPsi?.toLocaleString() || t.estimatedFcPsi}`,
       `${t.estimatedFcMpa}`,
       complianceText,
       statusText
@@ -268,6 +268,97 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
   });
 
   // Get current Y position after autoTable
+  let currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // --- DETAILED READINGS (1 TO 10 IMPACTS) MATRIX TABLE ---
+  if (currentY > pageHeight - 60) {
+    doc.addPage();
+    currentY = 16;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...primaryColor);
+  doc.text('4. REGISTRO DETALLADO DE IMPACTOS INDIVIDUALES (1 A 10) Y ESTADÍSTICA DE CAMPO', margin, currentY);
+  currentY += 3;
+
+  const detailHead = [
+    ['#', 'Elemento', 'Nivel/Eje', 'Áng.', 'I-1', 'I-2', 'I-3', 'I-4', 'I-5', 'I-6', 'I-7', 'I-8', 'I-9', 'I-10', 'Prom.', 'Rc', 'f\'c (PSI)', 'CV%', 'Val.']
+  ];
+
+  const detailBody = tests.map((t, index) => {
+    const r = t.readings || [];
+    const validCount = 10 - (t.excludedIndices?.length || 0);
+
+    return [
+      (index + 1).toString(),
+      t.elementTag,
+      t.levelAxis || 'N/A',
+      `${t.impactAngle > 0 ? `+${t.impactAngle}` : t.impactAngle}°`,
+      r[0] !== undefined ? `${r[0]}${t.excludedIndices?.includes(0) ? '*' : ''}` : '-',
+      r[1] !== undefined ? `${r[1]}${t.excludedIndices?.includes(1) ? '*' : ''}` : '-',
+      r[2] !== undefined ? `${r[2]}${t.excludedIndices?.includes(2) ? '*' : ''}` : '-',
+      r[3] !== undefined ? `${r[3]}${t.excludedIndices?.includes(3) ? '*' : ''}` : '-',
+      r[4] !== undefined ? `${r[4]}${t.excludedIndices?.includes(4) ? '*' : ''}` : '-',
+      r[5] !== undefined ? `${r[5]}${t.excludedIndices?.includes(5) ? '*' : ''}` : '-',
+      r[6] !== undefined ? `${r[6]}${t.excludedIndices?.includes(6) ? '*' : ''}` : '-',
+      r[7] !== undefined ? `${r[7]}${t.excludedIndices?.includes(7) ? '*' : ''}` : '-',
+      r[8] !== undefined ? `${r[8]}${t.excludedIndices?.includes(8) ? '*' : ''}` : '-',
+      r[9] !== undefined ? `${r[9]}${t.excludedIndices?.includes(9) ? '*' : ''}` : '-',
+      `${t.meanRaw}`,
+      `${t.meanCorrected}`,
+      `${t.estimatedFcPsi?.toLocaleString() || t.estimatedFcPsi}`,
+      `${t.cov || 0}%`,
+      `${validCount}/10`
+    ];
+  });
+
+  autoTable(doc, {
+    head: detailHead,
+    body: detailBody,
+    startY: currentY,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    styles: {
+      fontSize: 6.5,
+      cellPadding: 1.5,
+      font: 'helvetica',
+      textColor: [30, 41, 59],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+      halign: 'center',
+      valign: 'middle'
+    },
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 6.5
+    },
+    columnStyles: {
+      0: { cellWidth: 6 },
+      1: { cellWidth: 20, halign: 'left', fontStyle: 'bold' },
+      2: { cellWidth: 16, halign: 'left' },
+      3: { cellWidth: 10 },
+      4: { cellWidth: 7 },
+      5: { cellWidth: 7 },
+      6: { cellWidth: 7 },
+      7: { cellWidth: 7 },
+      8: { cellWidth: 7 },
+      9: { cellWidth: 7 },
+      10: { cellWidth: 7 },
+      11: { cellWidth: 7 },
+      12: { cellWidth: 7 },
+      13: { cellWidth: 7 },
+      14: { cellWidth: 10, fontStyle: 'bold' },
+      15: { cellWidth: 10, fontStyle: 'bold', fillColor: [241, 245, 249] },
+      16: { cellWidth: 16, fontStyle: 'bold', textColor: [2, 132, 199] },
+      17: { cellWidth: 10 },
+      18: { cellWidth: 10, fontStyle: 'bold', textColor: [5, 150, 105] }
+    }
+  });
+
   let finalY = (doc as any).lastAutoTable.finalY + 6;
 
   // Check if we need page break for conclusion & signatures
@@ -284,7 +375,7 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...primaryColor);
-  doc.text('4. CRITERIOS TÉCNICOS Y RECOMENDACIONES NORMATIVAS (NSR-10 / NTC 3692)', margin + 4, finalY + 5);
+  doc.text('5. CRITERIOS TÉCNICOS Y RECOMENDACIONES NORMATIVAS (NSR-10 / NTC 3692)', margin + 4, finalY + 5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);

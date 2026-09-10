@@ -28,8 +28,7 @@ import { NormInfoModal } from './components/NormInfoModal';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useTheme } from './context/ThemeContext';
 import { generateSclerometryPDF } from './utils/pdfGenerator';
-import { generateLPSReportPDF } from './utils/lpsPdfGenerator';
-import { generateLPSWordDocument } from './utils/lpsDocGenerator';
+import { downloadStandardWordDocument } from './utils/docGenerator';
 import { 
   Building2, 
   Layers, 
@@ -399,62 +398,41 @@ export function App() {
                 <span>Normativa</span>
               </button>
 
-              {/* Official Technical Report PDF & TXT Buttons */}
+              {/* Official Technical Report PDF & DOC Buttons */}
               {activeProject && (
                 <>
-                  {/* Original Technical Report PDF */}
+                  {/* Technical Report PDF */}
                   <button
                     onClick={() => {
                       if (activeProject) {
                         generateSclerometryPDF(activeProject, activeProjectTests);
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
-                    title="Descargar Informe Técnico Original Compacto (NTC 3692 / NSR-10)"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                    title="Descargar Informe Técnico Oficial en PDF (NTC 3692 / NSR-10)"
                   >
                     <FileDown className="h-4 w-4 text-emerald-400" />
-                    <span>PDF Original</span>
+                    <span>Descargar PDF</span>
                   </button>
 
-                  {/* LPS Official Dossier PDF */}
+                  {/* Technical Report DOC (Word) */}
                   <button
                     onClick={() => {
                       if (activeProject) {
-                        generateLPSReportPDF(activeProject, activeProjectTests);
+                        downloadStandardWordDocument(activeProject, activeProjectTests);
                       }
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm shadow-red-600/30 cursor-pointer"
-                    title="Descargar Dossier Oficial Completo LPS INGENIERÍA S.A.S. en PDF"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                    title="Descargar Informe Técnico en formato Microsoft Word Editable (.doc)"
                   >
-                    <Award className="h-4 w-4 text-amber-300" />
-                    <span>Dossier LPS (PDF)</span>
-                  </button>
-
-                  {/* LPS Word DOC */}
-                  <button
-                    onClick={() => {
-                      if (activeProject) {
-                        const docHtml = generateLPSWordDocument(activeProject, activeProjectTests);
-                        const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword;charset=utf-8;' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Informe_LPS_Esclerometria_${activeProject.code || 'PROYECTO'}_${new Date().toISOString().slice(0, 10)}.doc`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm shadow-blue-600/30 cursor-pointer"
-                    title="Descargar Documento Editable LPS para Microsoft Word (.doc)"
-                  >
-                    <FileCode className="h-4 w-4 text-white" />
-                    <span>Word LPS (.DOC)</span>
+                    <FileCode className="h-4 w-4 text-sky-300" />
+                    <span>Descargar Word (.DOC)</span>
                   </button>
 
                   <button
                     onClick={() => setIsExportReportOpen(true)}
                     className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                    title="Centro de Informes: Dossier LPS editable, Informe Original, Excel CSV y Formatos"
+                    title="Centro de Informes: Vista previa, Informe Técnico, Excel CSV y Copia rápida"
                   >
                     <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     <span>Centro de Informes</span>
@@ -924,13 +902,13 @@ export function App() {
                           <button
                             onClick={() => {
                               if (activeProject) {
-                                generateLPSReportPDF(activeProject, [test]);
+                                generateSclerometryPDF(activeProject, [test]);
                               }
                             }}
-                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 transition"
-                            title="Descargar Informe Oficial LPS (PDF) de este elemento"
+                            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition"
+                            title="Descargar Informe Técnico Oficial (PDF) de este elemento"
                           >
-                            <Award className="h-4 w-4" />
+                            <FileDown className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDuplicateTest(test)}
