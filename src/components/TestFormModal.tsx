@@ -88,7 +88,7 @@ export const TestFormModal: React.FC<TestFormModalProps> = ({
   const [readings, setReadings] = useState<number[]>(defaultReadings);
   const [photos, setPhotos] = useState<TestPhoto[]>(initialData?.photos || []);
   const [notes, setNotes] = useState(initialData?.notes || '');
-  const [operatorName, setOperatorName] = useState(initialData?.operatorName || 'Tec. Jhon Fredy Piraquive');
+  const [operatorName, setOperatorName] = useState(initialData?.operatorName || 'Ing. Fredy Piraquive');
 
   // Live calculation
   const carbonationFactor = getCarbonationFactor(carbonationDepthMm);
@@ -156,7 +156,7 @@ export const TestFormModal: React.FC<TestFormModalProps> = ({
       setReadings([...initialData.readings]);
       setPhotos(initialData.photos || []);
       setNotes(initialData.notes || '');
-      setOperatorName(initialData.operatorName || 'Tec. Jhon Fredy Piraquive');
+      setOperatorName(initialData.operatorName || 'Ing. Fredy Piraquive');
     } else if (isOpen) {
       // Generar valores aleatorios diversos únicos al abrir un nuevo registro
       const minT = fcDesignMpa > 0 ? fcDesignMpa * 0.94 : 22.0;
@@ -846,7 +846,7 @@ export const TestFormModal: React.FC<TestFormModalProps> = ({
                   type="text"
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
-                  placeholder="ej: Tec. Fredy Piraquive"
+                  placeholder="ej: Ing. Fredy Piraquive"
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-brand-500 focus:outline-none"
                 />
               </div>

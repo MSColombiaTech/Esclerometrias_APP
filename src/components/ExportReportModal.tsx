@@ -3,6 +3,7 @@ import { Project, SclerometryTest } from '../types';
 import { CURVE_MODEL_DESCRIPTIONS } from '../utils/sclerometryNorms';
 import { generateSclerometryPDF } from '../utils/pdfGenerator';
 import { downloadStandardWordDocument } from '../utils/docGenerator';
+import { ProjectAverageTable, calculateProjectAverageMetrics } from './ProjectAverageTable';
 import { X, FileText, Download, Copy, Check, Printer, FileDown, FileCode } from 'lucide-react';
 
 interface ExportReportModalProps {
@@ -85,6 +86,17 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
       sb += `• Diagnóstico / In-Situ:     ${diagnosticCount} (Sin f'c de diseño especificado)\n`;
     }
     sb += `• Ensayos Anulados/Inválidos: ${invalidCount}\n\n`;
+
+    const projMetrics = calculateProjectAverageMetrics(tests);
+    sb += 'CUADRO PROMEDIO DEL PROYECTO COMPLETO (RESISTENCIA GLOBAL):\n';
+    sb += '+--------------------+------------------+---------------+\n';
+    sb += '| Promedio           |        Σ         |      psi      |\n';
+    sb += '+--------------------+------------------+---------------+\n';
+    sb += `| resistencia        | ${projMetrics.validCount > 0 ? projMetrics.sumPsi.toFixed(2).padStart(16, ' ') : '0.00'.padStart(16, ' ')} | ${(projMetrics.validCount > 0 ? projMetrics.avgPsi.toFixed(2) : '0.00').padStart(13, ' ')} |\n`;
+    sb += '+--------------------+------------------+---------------+\n';
+    sb += `| % f'c espec.       | ${(projMetrics.hasDesign ? projMetrics.ratioFcEspec.toFixed(2) : 'N/A').padStart(16, ' ')} | ${projMetrics.complianceLabel.padStart(13, ' ')} |\n`;
+    sb += '+--------------------+------------------+---------------+\n\n';
+
     sb += '4. TABLA DETALLADA DE ELEMENTOS ENSAYADOS\n';
     sb += '--------------------------------------------------------------------------------\n';
 
@@ -296,7 +308,20 @@ export const ExportReportModal: React.FC<ExportReportModalProps> = ({
         </div>
 
         {/* Content Viewer */}
-        <div className="p-4 overflow-y-auto grow bg-slate-100 dark:bg-slate-950">
+        <div className="p-4 overflow-y-auto grow bg-slate-100 dark:bg-slate-950 space-y-3">
+          {/* Cuadro Promedio Visual */}
+          <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                Cuadro Promedio del Proyecto (Resistencia Global)
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Resumen analítico de resistencia requerida y promedio según NTC 3692 / NSR-10.
+              </p>
+            </div>
+            <ProjectAverageTable tests={tests} showCaption={false} />
+          </div>
+
           <pre className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-300 font-mono text-[11px] sm:text-xs whitespace-pre-wrap select-all leading-relaxed shadow-sm">
             {getCurrentContent()}
           </pre>

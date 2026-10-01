@@ -1,4 +1,5 @@
 import { Project, SclerometryTest } from '../types';
+import { calculateProjectAverageMetrics } from '../components/ProjectAverageTable';
 
 export function generateStandardWordDocument(project: Project, tests: SclerometryTest[]): string {
   const totalTests = tests.length;
@@ -20,6 +21,7 @@ export function generateStandardWordDocument(project: Project, tests: Sclerometr
   const totalPsiSum = tests.reduce((acc, t) => acc + (t.estimatedFcPsi || 0), 0);
   const avgPsi = tests.length > 0 ? (totalPsiSum / tests.length) : 0;
   const avgMpa = avgPsi * 0.00689476;
+  const projMetrics = calculateProjectAverageMetrics(tests);
 
   return `<!DOCTYPE html>
 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -451,6 +453,30 @@ export function generateStandardWordDocument(project: Project, tests: Sclerometr
           <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
         </tr>`;
       }).join('')}
+    </tbody>
+  </table>
+
+  <!-- CUADRO PROMEDIO DEL PROYECTO COMPLETO (EXACTO DEL FORMATO DE CONTROL) -->
+  <div style="margin: 14px 0 6px 0; font-weight: bold; font-size: 10pt; color: #0e4a6e;">
+    3.1 CUADRO PROMEDIO DEL PROYECTO COMPLETO (RESISTENCIA GLOBAL)
+  </div>
+  <table style="border-collapse: collapse; border: 2px solid #000000; margin: 4px 0 16px 0; font-family: Arial, sans-serif; font-size: 10pt; width: 330px;">
+    <tbody>
+      <tr style="border-bottom: 1.5px solid #000000;">
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; font-weight: bold; color: #000000; background-color: #ffffff; width: 120px; text-align: left;">Promedio</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; font-weight: bold; text-align: center; color: #000000; background-color: #ffffff; width: 105px;">Σ</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; font-weight: bold; text-align: center; color: #dc2626; background-color: #ffffff; width: 105px;">psi</td>
+      </tr>
+      <tr style="border-bottom: 1.5px solid #000000;">
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; color: #000000; background-color: #ffffff; text-align: left;">resistencia</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; text-align: center; font-weight: bold; color: #000000; background-color: #ffffff;">${projMetrics.validCount > 0 ? projMetrics.sumPsi.toFixed(2) : '0.00'}</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; text-align: center; font-weight: bold; color: #dc2626; background-color: #ffffff;">${projMetrics.validCount > 0 ? projMetrics.avgPsi.toFixed(2) : '0.00'}</td>
+      </tr>
+      <tr>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; color: #000000; background-color: #ffffff; text-align: left;">% f'c espec.</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; text-align: center; font-weight: bold; color: #dc2626; background-color: #ffffff;">${projMetrics.hasDesign ? projMetrics.ratioFcEspec.toFixed(2) : 'N/A'}</td>
+        <td style="border: 1.5px solid #000000; padding: 5px 12px; text-align: center; font-weight: bold; color: #dc2626; background-color: #ffffff;">${projMetrics.complianceLabel}</td>
+      </tr>
     </tbody>
   </table>
 

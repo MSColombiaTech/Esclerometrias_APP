@@ -25,6 +25,7 @@ import { QuickCalculatorModal } from './components/QuickCalculatorModal';
 import { ProjectFormModal } from './components/ProjectFormModal';
 import { ExportReportModal } from './components/ExportReportModal';
 import { NormInfoModal } from './components/NormInfoModal';
+import { ProjectAverageTable } from './components/ProjectAverageTable';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useTheme } from './context/ThemeContext';
 import { generateSclerometryPDF } from './utils/pdfGenerator';
@@ -573,14 +574,14 @@ export function App() {
             </div>
 
             {/* Quick KPI Stats Bar */}
-            <div className="grid grid-cols-4 gap-2 text-center bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="grid grid-cols-4 gap-2 text-center bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 min-w-[320px] sm:min-w-[400px]">
               <div className="px-2 py-1">
-                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Total Ensayos</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">Total Ensayos</p>
                 <p className="text-lg font-black font-mono text-slate-900 dark:text-white">{stats.total}</p>
               </div>
 
               <div className="px-2 py-1 border-l border-slate-200 dark:border-slate-800">
-                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Conformidad</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">Conformidad</p>
                 <p className={`text-lg font-black font-mono ${
                   stats.compliancePct >= 90 ? 'text-emerald-600 dark:text-emerald-400' :
                   stats.compliancePct >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
@@ -590,12 +591,12 @@ export function App() {
               </div>
 
               <div className="px-2 py-1 border-l border-slate-200 dark:border-slate-800">
-                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Promedio R</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">Promedio R</p>
                 <p className="text-lg font-black font-mono text-amber-600 dark:text-amber-400">{stats.avgR}</p>
               </div>
 
               <div className="px-2 py-1 border-l border-slate-200 dark:border-slate-800">
-                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">f'c Promedio</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">f'c Promedio</p>
                 <p className="text-lg font-black font-mono text-sky-600 dark:text-sky-400">{(stats.avgFcPsi ?? 0).toLocaleString()} <span className="text-[10px] font-normal">PSI</span></p>
                 <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">{stats.avgFc ?? 0} MPa</p>
               </div>
@@ -940,6 +941,26 @@ export function App() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Cuadro Promedio Resumen Global del Proyecto */}
+            {activeProjectTests.length > 0 && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5 transition-colors">
+                <div className="space-y-1.5 max-w-xl">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-500 ring-4 ring-sky-500/10" />
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                      Cuadro Promedio del Proyecto (Resistencia Global)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Evaluación y balance global de resistencia según NTC 3692 y NSR-10 (Título C.5). Consolida la sumatoria acumulada (Σ) y la resistencia media estimada (psi), contrastada con el diseño estructural (% f'c espec.) para el dictamen final.
+                  </p>
+                </div>
+                <div className="shrink-0 w-full md:w-auto flex justify-end">
+                  <ProjectAverageTable tests={activeProjectTests} showCaption={false} />
+                </div>
               </div>
             )}
 

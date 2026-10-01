@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Project, SclerometryTest } from '../types';
 import { CURVE_MODEL_DESCRIPTIONS } from './sclerometryNorms';
+import { calculateProjectAverageMetrics } from '../components/ProjectAverageTable';
 
 export function generateSclerometryPDF(project: Project, tests: SclerometryTest[]): void {
   const doc = new jsPDF({
@@ -268,7 +269,55 @@ export function generateSclerometryPDF(project: Project, tests: SclerometryTest[
   });
 
   // Get current Y position after autoTable
-  let currentY = (doc as any).lastAutoTable.finalY + 8;
+  let currentY = (doc as any).lastAutoTable.finalY + 6;
+
+  // --- CUADRO PROMEDIO DEL PROYECTO COMPLETO (EXACTO DEL FORMATO DE CONTROL) ---
+  const projMetrics = calculateProjectAverageMetrics(tests);
+  
+  if (currentY > pageHeight - 55) {
+    doc.addPage();
+    currentY = 16;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...primaryColor);
+  doc.text('3.1 CUADRO PROMEDIO DEL PROYECTO COMPLETO (RESISTENCIA GLOBAL)', margin, currentY);
+  currentY += 2.5;
+
+  autoTable(doc, {
+    startY: currentY,
+    theme: 'grid',
+    tableWidth: 80,
+    margin: { left: margin },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.35,
+      fontSize: 8,
+      cellPadding: 2,
+      textColor: [0, 0, 0],
+      fillColor: [255, 255, 255]
+    },
+    body: [
+      [
+        { content: 'Promedio', styles: { fontStyle: 'bold', halign: 'left', textColor: [0, 0, 0] } },
+        { content: 'Σ', styles: { fontStyle: 'bold', halign: 'center', textColor: [0, 0, 0] } },
+        { content: 'psi', styles: { fontStyle: 'bold', halign: 'center', textColor: [220, 38, 38] } }
+      ],
+      [
+        { content: 'resistencia', styles: { fontStyle: 'normal', halign: 'left', textColor: [0, 0, 0] } },
+        { content: projMetrics.validCount > 0 ? projMetrics.sumPsi.toFixed(2) : '0.00', styles: { fontStyle: 'bold', halign: 'center', textColor: [0, 0, 0] } },
+        { content: projMetrics.validCount > 0 ? projMetrics.avgPsi.toFixed(2) : '0.00', styles: { fontStyle: 'bold', halign: 'center', textColor: [220, 38, 38] } }
+      ],
+      [
+        { content: "% f'c espec.", styles: { fontStyle: 'normal', halign: 'left', textColor: [0, 0, 0] } },
+        { content: projMetrics.hasDesign ? projMetrics.ratioFcEspec.toFixed(2) : 'N/A', styles: { fontStyle: 'bold', halign: 'center', textColor: [220, 38, 38] } },
+        { content: projMetrics.complianceLabel, styles: { fontStyle: 'bold', halign: 'center', textColor: [220, 38, 38] } }
+      ]
+    ]
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
 
   // --- DETAILED READINGS (1 TO 10 IMPACTS) MATRIX TABLE ---
   if (currentY > pageHeight - 60) {

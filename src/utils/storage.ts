@@ -139,7 +139,8 @@ export function getStoredTests(): SclerometryTest[] {
         estimatedFcPsi: evalRes.estimatedFcPsi,
         complianceRatio: evalRes.complianceRatio,
         status: evalRes.status,
-        statusNotes: evalRes.statusNotes
+        statusNotes: evalRes.statusNotes,
+        operatorName: t.operatorName === 'Tec. Jhon Fredy Piraquive' ? 'Ing. Fredy Piraquive' : (t.operatorName || 'Ing. Fredy Piraquive')
       };
     });
 
@@ -318,7 +319,7 @@ function getInitialTests(): SclerometryTest[] {
       statusNotes: evalRes.statusNotes,
       photos: [],
       notes,
-      operatorName: 'Tec. Jhon Fredy Piraquive',
+      operatorName: 'Ing. Fredy Piraquive',
       createdAt,
       updatedAt: createdAt
     };
