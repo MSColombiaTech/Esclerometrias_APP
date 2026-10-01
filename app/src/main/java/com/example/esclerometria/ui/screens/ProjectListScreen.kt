@@ -54,6 +54,7 @@ fun ProjectListScreen(
 
     Scaffold(
         containerColor = Slate950,
+        contentWindowInsets = WindowInsets.navigationBars,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNewProject,
@@ -72,12 +73,12 @@ fun ProjectListScreen(
             }
         }
     ) { innerPadding ->
+        val navBottom = innerPadding.calculateBottomPadding()
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 88.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = navBottom + 88.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header Banner

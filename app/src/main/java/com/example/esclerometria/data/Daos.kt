@@ -8,20 +8,23 @@ interface ProjectDao {
     @Query("SELECT * FROM projects ORDER BY updatedAt DESC")
     fun getAllProjects(): Flow<List<ProjectEntity>>
 
+    @Query("SELECT COUNT(*) FROM projects")
+    fun getProjectCount(): Int
+
     @Query("SELECT * FROM projects WHERE id = :id")
-    suspend fun getProjectById(id: String): ProjectEntity?
+    fun getProjectById(id: String): ProjectEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertProject(project: ProjectEntity)
+    fun insertProject(project: ProjectEntity): Long
 
     @Update
-    suspend fun updateProject(project: ProjectEntity)
+    fun updateProject(project: ProjectEntity): Int
 
     @Delete
-    suspend fun deleteProject(project: ProjectEntity)
+    fun deleteProject(project: ProjectEntity): Int
 
     @Query("DELETE FROM projects WHERE id = :id")
-    suspend fun deleteProjectById(id: String)
+    fun deleteProjectById(id: String): Int
 }
 
 @Dao
@@ -33,23 +36,23 @@ interface TestDao {
     fun getTestsByProject(projectId: String): Flow<List<SclerometryTestEntity>>
 
     @Query("SELECT * FROM tests WHERE id = :id")
-    suspend fun getTestById(id: String): SclerometryTestEntity?
+    fun getTestById(id: String): SclerometryTestEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTest(test: SclerometryTestEntity)
+    fun insertTest(test: SclerometryTestEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAllTests(tests: List<SclerometryTestEntity>)
+    fun insertAllTests(tests: List<SclerometryTestEntity>): List<Long>
 
     @Update
-    suspend fun updateTest(test: SclerometryTestEntity)
+    fun updateTest(test: SclerometryTestEntity): Int
 
     @Delete
-    suspend fun deleteTest(test: SclerometryTestEntity)
+    fun deleteTest(test: SclerometryTestEntity): Int
 
     @Query("DELETE FROM tests WHERE id = :id")
-    suspend fun deleteTestById(id: String)
+    fun deleteTestById(id: String): Int
 
     @Query("DELETE FROM tests WHERE projectId = :projectId")
-    suspend fun deleteTestsByProject(projectId: String)
+    fun deleteTestsByProject(projectId: String): Int
 }

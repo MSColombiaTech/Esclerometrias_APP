@@ -63,12 +63,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
-        // Select first project when loaded if none selected
-        viewModelScope.launch {
-            allProjects.collect { list ->
-                if (_activeProjectId.value == null && list.isNotEmpty()) {
-                    _activeProjectId.value = list.first().id
+        // Ensure database has demo projects and tests if empty
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (repository.getProjectCount() == 0) {
+                    val db = AppDatabase.getDatabase(application, viewModelScope)
+                    com.example.esclerometria.data.populateInitialData(db.projectDao(), db.testDao())
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Error initializing data", e)
             }
         }
     }

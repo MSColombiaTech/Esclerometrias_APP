@@ -2,9 +2,13 @@ package com.example.esclerometria
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -29,7 +33,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         setContent {
             EsclerometriaProTheme {
                 MainAppContent(viewModel = viewModel)
@@ -57,8 +64,16 @@ fun MainAppContent(viewModel: MainViewModel) {
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // On phone back button/gesture, return to Project List if inside a project
+    if (activeProject != null) {
+        BackHandler {
+            viewModel.selectProject(null)
+        }
+    }
+
     Scaffold(
         containerColor = Slate950,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AppTopBar(
@@ -73,10 +88,10 @@ fun MainAppContent(viewModel: MainViewModel) {
             )
         }
     ) { innerPadding ->
-        androidx.compose.foundation.layout.Box(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             val currentProject = activeProject
             if (currentProject == null) {

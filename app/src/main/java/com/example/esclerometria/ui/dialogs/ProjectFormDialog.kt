@@ -62,6 +62,7 @@ fun ProjectFormDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
+                .systemBarsPadding()
                 .padding(12.dp),
             shape = RoundedCornerShape(20.dp),
             color = Slate900,
